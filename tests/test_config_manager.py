@@ -12,6 +12,8 @@ def test_update_global_settings_persists_group_by_author(tmp_path: Path):
         create_folder=True,
         group_by_author=True,
         max_concurrent_downloads=3,
+        move_after_completion=True,
+        destination_path="/audiobooks",
     )
     assert ok is True
 
@@ -20,6 +22,8 @@ def test_update_global_settings_persists_group_by_author(tmp_path: Path):
     assert loaded["create_folder"] is True
     assert loaded["group_by_author"] is True
     assert loaded["max_concurrent_downloads"] == 3
+    assert loaded["move_after_completion"] is True
+    assert loaded["destination_path"] == "/audiobooks"
 
     # Ensure it is valid TOML on disk
     data = tomllib.loads(Path(cm.get_config_file_path()).read_text(encoding="utf-8"))

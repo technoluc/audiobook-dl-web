@@ -56,6 +56,7 @@ class DownloadStatus(Enum):
 
     PENDING = "pending"
     DOWNLOADING = "downloading"
+    TRANSFERRING = "transferring"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -74,6 +75,7 @@ class DownloadTask:
         self.completed_at: datetime | None = None
         self.error: str | None = None
         self.output_file: str | None = None
+        self.transfer_destination: str | None = None
         self.metadata: dict | None = None
         self.expected_output_dir: Path | None = None  # Track expected output directory
 
@@ -96,6 +98,7 @@ class DownloadTask:
             "completed_at": (self.completed_at.isoformat() if self.completed_at else None),
             "error": self.error,
             "output_file": self.output_file,
+            "transfer_destination": self.transfer_destination,
             "metadata": self.metadata,
         }
 
@@ -144,6 +147,8 @@ class DownloadManager:
         self.create_folder = config.get("create_folder", False)
         self.group_by_author = config.get("group_by_author", False)
         self.default_output_template = config.get("output_template", "{title}")
+        self.move_after_completion = config.get("move_after_completion", False)
+        self.destination_path = config.get("destination_path", "")
 
         # Ensure valid range (1-10)
         self.max_concurrent_downloads = max(1, min(10, self.max_concurrent_downloads))
@@ -273,11 +278,6 @@ class DownloadManager:
             await process.wait()
 
             if process.returncode == 0:
-                task.status = DownloadStatus.COMPLETED
-                task.progress = 100
-                task.message = "Download completed successfully!"
-                task.completed_at = datetime.now()
-
                 # Keep search root within this task's staging directory for deterministic
                 # file detection, then unwrap/move after we've identified the output.
                 search_root = task.expected_output_dir or self.downloads_dir
@@ -346,6 +346,29 @@ class DownloadManager:
                         logger.info(f"Metadata extracted: {list(task.metadata.keys())}")
                     else:
                         logger.warning(f"No metadata extracted for: {task.output_file}")
+
+                if self.move_after_completion:
+                    try:
+                        await self._transfer_completed_output(task)
+                    except Exception as e:
+                        task.status = DownloadStatus.FAILED
+                        task.message = "Transfer to final destination failed; local file retained"
+                        task.error = str(e)
+                        task.completed_at = datetime.now()
+                        logger.error(
+                            f"Transfer failed - Task: {task.task_id}, Error: {e}, "
+                            f"Local file: {task.output_file}"
+                        )
+                        return
+
+                task.status = DownloadStatus.COMPLETED
+                task.progress = 100
+                task.message = (
+                    "Transfer completed successfully!"
+                    if self.move_after_completion
+                    else "Download completed successfully!"
+                )
+                task.completed_at = datetime.now()
 
                 log_msg = (
                     f"Download completed - Task: {task.task_id}, Duration: {task.duration:.1f}s"
@@ -451,6 +474,111 @@ class DownloadManager:
         ]
         for task_id in to_remove:
             del self.tasks[task_id]
+
+    def _resolve_local_output(self, output_file: str | None) -> Path:
+        """Resolve a task output and ensure it is a local file under DOWNLOADS_DIR."""
+        if not output_file:
+            raise RuntimeError("No completed local audio file was found to transfer")
+
+        source = Path(output_file)
+        if not source.is_absolute():
+            source = self.downloads_dir / source
+        source = source.resolve()
+
+        if not source.is_relative_to(self.downloads_dir):
+            raise RuntimeError("Refusing to transfer a source outside DOWNLOADS_DIR")
+        if not source.is_file():
+            raise RuntimeError(f"Local source file does not exist: {source}")
+        return source
+
+    @staticmethod
+    def _parse_transfer_progress(text: str, current_progress: int) -> int:
+        """Return the last valid rsync percentage found in a stream chunk."""
+        percentages = [int(value) for value in re.findall(r"(?<!\d)(\d{1,3})%", text)]
+        valid = [value for value in percentages if 0 <= value <= 100]
+        return valid[-1] if valid else current_progress
+
+    async def _transfer_completed_output(self, task: DownloadTask) -> None:
+        """Copy the completed output with rsync and remove the source after verification."""
+        source = self._resolve_local_output(task.output_file)
+        if not self.destination_path:
+            raise RuntimeError("No final destination path is configured")
+
+        destination = Path(self.destination_path).expanduser()
+        if not destination.is_absolute():
+            raise RuntimeError("The final destination path must be absolute")
+        destination = destination.resolve()
+        if not destination.exists() or not destination.is_dir():
+            raise RuntimeError(f"Final destination is not an available directory: {destination}")
+        if destination == self.downloads_dir or destination.is_relative_to(self.downloads_dir):
+            raise RuntimeError("The final destination must be outside DOWNLOADS_DIR")
+
+        final_file = destination / source.name
+        if final_file.resolve() == source:
+            raise RuntimeError("The final destination resolves to the local source file")
+
+        task.status = DownloadStatus.TRANSFERRING
+        task.progress = 0
+        task.transfer_destination = output_processor.normalize_path(final_file)
+        task.message = f"Transferring to {destination}..."
+
+        cmd = [
+            "rsync",
+            "--archive",
+            "--human-readable",
+            "--progress",
+            str(source),
+            f"{destination}/",
+        ]
+        logger.info(
+            f"Transfer started - Task: {task.task_id}, Source: {source}, Destination: {destination}"
+        )
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except FileNotFoundError as e:
+            raise RuntimeError("rsync is not installed or not available on PATH") from e
+
+        async def read_stream(stream, captured: list[str]) -> None:
+            while True:
+                chunk = await stream.read(4096)
+                if not chunk:
+                    break
+                text = chunk.decode("utf-8", errors="replace")
+                captured.append(text)
+                task.progress = self._parse_transfer_progress(text, task.progress)
+                task.message = f"Transferring to {destination}... {task.progress}%"
+
+        stdout_chunks: list[str] = []
+        stderr_chunks: list[str] = []
+        if process.stdout is None or process.stderr is None:
+            raise RuntimeError("Failed to capture rsync output streams")
+        await asyncio.gather(
+            read_stream(process.stdout, stdout_chunks),
+            read_stream(process.stderr, stderr_chunks),
+        )
+        await process.wait()
+
+        if process.returncode != 0:
+            detail = "".join(stderr_chunks).strip() or "".join(stdout_chunks).strip()
+            detail = re.sub(r"\s+", " ", detail)[-1000:]
+            raise RuntimeError(
+                f"rsync exited with code {process.returncode}" + (f": {detail}" if detail else "")
+            )
+
+        if not final_file.is_file() or final_file.stat().st_size != source.stat().st_size:
+            raise RuntimeError("Transferred file could not be verified; local file retained")
+
+        source.unlink()
+        task.output_file = output_processor.normalize_path(final_file)
+        task.progress = 100
+        logger.info(
+            f"Transfer completed - Task: {task.task_id}, Destination: {final_file}; local source removed"
+        )
 
     def _build_download_command(
         self,

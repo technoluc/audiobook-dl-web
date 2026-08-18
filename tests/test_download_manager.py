@@ -1,6 +1,14 @@
+import shutil
 from pathlib import Path
 
-from app.download_manager import DownloadManager, sanitize_template_literal
+import pytest
+
+from app.download_manager import (
+    DownloadManager,
+    DownloadStatus,
+    DownloadTask,
+    sanitize_template_literal,
+)
 
 
 def test_sanitize_template_literal_preserves_spaces_and_hyphen():
@@ -167,3 +175,83 @@ def test_unwrap_staging_dir_moves_single_file(tmp_path: Path):
     assert Path(new_output).exists()
     assert (downloads_dir / "out.m4b").exists()
     assert not staging_dir.exists()
+
+
+def test_parse_transfer_progress_uses_latest_valid_percentage():
+    assert DownloadManager._parse_transfer_progress(" 12%\r 67%", 3) == 67
+    assert DownloadManager._parse_transfer_progress("no progress here", 42) == 42
+    assert DownloadManager._parse_transfer_progress("999%", 42) == 42
+
+
+class _FakeStream:
+    def __init__(self, chunks: list[bytes]):
+        self.chunks = iter(chunks)
+
+    async def read(self, _size: int) -> bytes:
+        return next(self.chunks, b"")
+
+
+class _FakeProcess:
+    def __init__(self, returncode: int, stdout: list[bytes], stderr: list[bytes]):
+        self.returncode = returncode
+        self.stdout = _FakeStream(stdout)
+        self.stderr = _FakeStream(stderr)
+
+    async def wait(self) -> int:
+        return self.returncode
+
+
+@pytest.mark.asyncio
+async def test_transfer_removes_source_only_after_success(tmp_path: Path, monkeypatch):
+    config_dir = tmp_path / "config"
+    downloads_dir = tmp_path / "downloads"
+    destination = tmp_path / "nas"
+    config_dir.mkdir()
+    destination.mkdir()
+    dm = DownloadManager(str(config_dir), str(downloads_dir))
+    dm.destination_path = str(destination)
+
+    source = downloads_dir / "book.m4b"
+    source.write_bytes(b"audiobook")
+    task = DownloadTask("https://example.invalid/book", "success")
+    task.output_file = str(source)
+
+    async def fake_rsync(*cmd, **_kwargs):
+        shutil.copyfile(Path(cmd[-2]), Path(cmd[-1]) / Path(cmd[-2]).name)
+        return _FakeProcess(0, [b" 10%\r", b" 100%\n"], [])
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_rsync)
+    await dm._transfer_completed_output(task)
+
+    assert task.status is DownloadStatus.TRANSFERRING
+    assert task.progress == 100
+    assert not source.exists()
+    assert (destination / "book.m4b").read_bytes() == b"audiobook"
+    assert task.output_file == str(destination / "book.m4b")
+
+
+@pytest.mark.asyncio
+async def test_transfer_failure_keeps_local_source(tmp_path: Path, monkeypatch):
+    config_dir = tmp_path / "config"
+    downloads_dir = tmp_path / "downloads"
+    destination = tmp_path / "nas"
+    config_dir.mkdir()
+    destination.mkdir()
+    dm = DownloadManager(str(config_dir), str(downloads_dir))
+    dm.destination_path = str(destination)
+
+    source = downloads_dir / "book.m4b"
+    source.write_bytes(b"audiobook")
+    task = DownloadTask("https://example.invalid/book", "failure")
+    task.output_file = str(source)
+
+    async def fake_rsync(*_cmd, **_kwargs):
+        return _FakeProcess(23, [b" 40%\r"], [b"NAS disconnected"])
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_rsync)
+
+    with pytest.raises(RuntimeError, match="code 23"):
+        await dm._transfer_completed_output(task)
+
+    assert source.read_bytes() == b"audiobook"
+    assert task.output_file == str(source)

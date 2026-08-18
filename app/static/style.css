@@ -85,6 +85,10 @@ main {
     border-left-color: var(--primary-color);
 }
 
+.task-card.status-transferring {
+    border-left: 4px solid var(--bs-info);
+}
+
 .task-card.status-completed {
     border-left-color: var(--success-color);
 }

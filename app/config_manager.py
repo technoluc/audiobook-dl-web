@@ -164,6 +164,8 @@ class ConfigManager:
         max_concurrent_downloads: int | None = None,
         create_folder: bool | None = None,
         group_by_author: bool | None = None,
+        move_after_completion: bool | None = None,
+        destination_path: str | None = None,
     ) -> bool:
         """
         Update global audiobook-dl settings
@@ -188,6 +190,8 @@ class ConfigManager:
             "max_concurrent_downloads": max_concurrent_downloads,
             "create_folder": create_folder,
             "group_by_author": group_by_author,
+            "move_after_completion": move_after_completion,
+            "destination_path": destination_path,
         }
 
         changes = []

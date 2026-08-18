@@ -38,6 +38,8 @@ RUN curl -L \
         /usr/local/lib/python3.14/site-packages/audiobookdl/ && \
     rm -rf /tmp/audiobook-dl.tar.gz /tmp/audiobook-dl-src
 
+RUN pip install --no-cache-dir python-dateutil
+
 # Create directories for volumes
 RUN mkdir -p /app/config /app/downloads /app/logs
 

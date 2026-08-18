@@ -16,6 +16,7 @@ WORKDIR /app
 # Copy project files and application code
 COPY pyproject.toml ./
 COPY app/ ./app/
+COPY patch_nextory.py ./
 
 # Install application dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
@@ -38,7 +39,11 @@ RUN curl -L \
         /usr/local/lib/python3.14/site-packages/audiobookdl/ && \
     rm -rf /tmp/audiobook-dl.tar.gz /tmp/audiobook-dl-src
 
+# Required by the Nextory cover patch
 RUN pip install --no-cache-dir python-dateutil
+
+# Apply Nextory WebP -> JPEG cover patch
+RUN python3 /app/patch_nextory.py
 
 # Create directories for volumes
 RUN mkdir -p /app/config /app/downloads /app/logs

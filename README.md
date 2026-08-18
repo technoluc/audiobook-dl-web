@@ -94,17 +94,20 @@ The Docker Compose configuration creates four important volumes:
 - `./config` - Stores `audiobook-dl.toml` configuration file with credentials
 - `./downloads` - Stores downloaded audiobooks
 - `./logs` - Stores application logs with timestamps
-- `${AUDIOBOOK_DESTINATION_HOST_PATH:-./audiobooks}` - Final audiobook destination, mounted at `/audiobooks` in the container
+- `/data/media/audiobooks` - Final audiobook destination, mounted at `/audiobooks` in the container
 
 These directories are automatically created and persisted on your host machine.
 
-To use a mounted NAS path, set the host path before starting the container and then enable
-**Move completed audiobooks** in Settings with `/audiobooks` as the destination:
+The NAS host path is configured directly in `docker-compose.yml`:
 
-```bash
-export AUDIOBOOK_DESTINATION_HOST_PATH=/data/media/audiobooks
-docker compose up -d
+```yaml
+volumes:
+  - /data/media/audiobooks:/audiobooks
 ```
+
+Change the left side if your NAS is mounted elsewhere on the Docker host. Then start the container
+normally with `docker compose up -d` and enable **Move completed audiobooks** in Settings with
+`/audiobooks` as the destination.
 
 The app downloads and converts in `/app/downloads` first. It then copies the completed audio file
 with `rsync`, verifies the destination file, and only then removes the local source. If the mount is

@@ -17,6 +17,7 @@ WORKDIR /app
 COPY pyproject.toml ./
 COPY app/ ./app/
 COPY patch_nextory.py ./
+COPY patch_audiobook_metadata.py ./
 
 # Install application dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
@@ -44,6 +45,10 @@ RUN pip install --no-cache-dir python-dateutil
 
 # Apply Nextory WebP -> JPEG cover patch
 RUN python3 /app/patch_nextory.py
+
+# Store the book title in both title and album, and keep series metadata
+# in dedicated tags so Audiobookshelf does not mistake the series for the title.
+RUN python3 /app/patch_audiobook_metadata.py
 
 # Create directories for volumes
 RUN mkdir -p /app/config /app/downloads /app/logs

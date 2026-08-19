@@ -43,10 +43,10 @@ RUN curl -L \
 # Required by the Nextory cover patch
 RUN pip install --no-cache-dir python-dateutil
 
-# Install the latest Grawlix source for e-book downloads. The released PyPI
+# Install the patched Grawlix fork for e-book downloads. The released PyPI
 # package is retained as a normal dependency for non-Docker installations.
 RUN curl -L \
-        https://github.com/jo1gi/grawlix/archive/refs/heads/master.tar.gz \
+        https://github.com/technoluc/grawlix/archive/refs/heads/master.tar.gz \
         -o /tmp/grawlix.tar.gz && \
     mkdir -p /tmp/grawlix-src && \
     tar -xzf /tmp/grawlix.tar.gz \

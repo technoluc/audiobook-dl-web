@@ -90,8 +90,8 @@ The Docker Compose configuration creates five important volumes:
 - `./config` - Stores `audiobook-dl.toml` configuration file with credentials
 - `./downloads` - Stores downloaded audiobooks
 - `./logs` - Stores application logs with timestamps
-- `/data/media/audiobooks` - Final audiobook destination, mounted at `/audiobooks` in the container
-- `/data/media/ebooks` - Final e-book destination, mounted at `/ebooks` in the container
+- `./completed/audiobooks` - Default final audiobook destination, mounted at `/audiobooks` in the container
+- `./completed/ebooks` - Default final e-book destination, mounted at `/ebooks` in the container
 
 These directories are automatically created and persisted on your host machine.
 
@@ -99,11 +99,13 @@ The NAS host paths are configured directly in `docker-compose.yml`:
 
 ```yaml
 volumes:
-  - /data/media/audiobooks:/audiobooks
-  - /data/media/ebooks:/ebooks
+  - ./completed/audiobooks:/audiobooks
+  - ./completed/ebooks:/ebooks
 ```
 
 Change only the left side of each mapping when the NAS is mounted elsewhere on the Docker host.
+For example, use `/data/media/audiobooks:/audiobooks` and
+`/data/media/ebooks:/ebooks` when those NAS paths are available to Docker.
 Start with `docker compose up -d`. In Settings, use `/audiobooks` for completed audiobooks and
 `/ebooks` for completed e-books.
 

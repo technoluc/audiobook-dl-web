@@ -338,6 +338,11 @@ class DownloadManager:
                     except Exception as e:
                         logger.warning(f"Task {task.task_id}: Failed to unwrap staging dir: {e}")
 
+                # Normalize the finished local file before metadata extraction and
+                # before rsync transfers it to the final Audiobookshelf location.
+                if task.output_file:
+                    output_processor.normalize_audiobookshelf_metadata(task.output_file)
+
                 # Extract metadata from the file
                 if task.output_file:
                     logger.info(f"Extracting metadata for: {task.output_file}")

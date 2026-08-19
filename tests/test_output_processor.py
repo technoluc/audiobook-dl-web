@@ -7,6 +7,61 @@ import pytest
 from app import output_processor
 
 
+def test_normalize_audiobookshelf_metadata_preserves_series(monkeypatch):
+    class FakeMP4:
+        def __init__(self, _path):
+            self.tags = {
+                "\xa9nam": ["Stil maar"],
+                "\xa9alb": ["Gina Harte"],
+                "trkn": [(1, 0)],
+            }
+            self.saved = False
+
+        def add_tags(self):
+            self.tags = {}
+
+        def save(self):
+            self.saved = True
+
+    fake = FakeMP4("ignored")
+    monkeypatch.setattr("mutagen.mp4.MP4", lambda _path: fake)
+
+    tags = output_processor.normalize_audiobookshelf_metadata("Stil maar.m4b")
+
+    assert tags == {
+        "title": "Stil maar",
+        "album": "Stil maar",
+        "series": "Gina Harte",
+        "series_part": "1",
+    }
+    assert fake.tags["\xa9alb"] == ["Stil maar"]
+    assert fake.tags["----:com.apple.iTunes:Series"] == [b"Gina Harte"]
+    assert fake.tags["----:com.apple.iTunes:Series-Part"] == [b"1"]
+    assert fake.saved is True
+
+
+def test_normalize_audiobookshelf_metadata_does_not_overwrite_existing_series(monkeypatch):
+    class FakeMP4:
+        def __init__(self, _path):
+            self.tags = {
+                "\xa9nam": ["Book title"],
+                "\xa9alb": ["Old album value"],
+                "----:com.apple.iTunes:Series": [b"Correct series"],
+            }
+
+        def save(self):
+            pass
+
+    fake = FakeMP4("ignored")
+    monkeypatch.setattr("mutagen.mp4.MP4", lambda _path: fake)
+
+    tags = output_processor.normalize_audiobookshelf_metadata("book.m4a")
+
+    assert tags["album"] == "Book title"
+    assert tags["series"] == "Correct series"
+    assert fake.tags["----:com.apple.iTunes:Series"] == [b"Correct series"]
+
+
 def test_find_output_file_in_lines_parses_output_keyword(tmp_path: Path):
     downloads_dir = tmp_path
     p = downloads_dir / "out.m4b"

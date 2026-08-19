@@ -13,7 +13,6 @@ venv/
 # Application specific
 config/
 downloads/
-completed/
 *.toml
 !pyproject.toml
 cookies.txt

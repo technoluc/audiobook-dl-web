@@ -77,12 +77,6 @@ The easiest way to run audiobook-dl-web is using Docker:
 git clone https://github.com/yourusername/audiobook-dl-web.git
 cd audiobook-dl-web
 
-# Copy the example environment file
-cp .env.example .env
-
-# Edit .env if needed (optional)
-nano .env
-
 # Start with docker-compose
 docker-compose up -d
 ```
@@ -96,21 +90,22 @@ The Docker Compose configuration creates five important volumes:
 - `./config` - Stores `audiobook-dl.toml` configuration file with credentials
 - `./downloads` - Stores downloaded audiobooks
 - `./logs` - Stores application logs with timestamps
-- `${AUDIOBOOKS_PATH}` - Final audiobook destination, mounted at `/audiobooks` in the container
-- `${EBOOKS_PATH}` - Final e-book destination, mounted at `/ebooks` in the container
+- `/data/media/audiobooks` - Final audiobook destination, mounted at `/audiobooks` in the container
+- `/data/media/ebooks` - Final e-book destination, mounted at `/ebooks` in the container
 
 These directories are automatically created and persisted on your host machine.
 
-The NAS host paths are configured in `.env` (copy `.env.example` first):
+The NAS host paths are configured directly in `docker-compose.yml`:
 
-```dotenv
-AUDIOBOOKS_PATH=/data/media/audiobooks
-EBOOKS_PATH=/data/media/ebooks
+```yaml
+volumes:
+  - /data/media/audiobooks:/audiobooks
+  - /data/media/ebooks:/ebooks
 ```
 
-When these variables are omitted, Compose uses `./completed/audiobooks` and `./completed/ebooks`,
-so the stack works locally without additional setup. Start with `docker compose up -d`. In Settings,
-use `/audiobooks` for completed audiobooks and `/ebooks` for completed e-books.
+Change only the left side of each mapping when the NAS is mounted elsewhere on the Docker host.
+Start with `docker compose up -d`. In Settings, use `/audiobooks` for completed audiobooks and
+`/ebooks` for completed e-books.
 
 The app downloads and converts in `/app/downloads` first. It then copies the completed audio file
 with `rsync`, verifies the destination file, and only then removes the local source. If the mount is
@@ -204,10 +199,6 @@ winget install -e Gyan.FFmpeg
 mkdir -p config downloads logs  # Linux/macOS
 # On Windows PowerShell: New-Item -ItemType Directory -Path config, downloads, logs -Force
 
-# Copy environment file (optional)
-cp .env.example .env  # Linux/macOS
-# On Windows: copy .env.example .env
-
 # Start the application
 python -m app.main  # Or on Windows PowerShell: .\start.ps1
 ```
@@ -269,9 +260,9 @@ Navigate to **Settings** to configure:
 
 ## Configuration
 
-### Environment Variables
+### Docker environment
 
-The application can be configured using environment variables in `.env`:
+Container settings are kept directly in `docker-compose.yml`:
 
 ```bash
 # Server Configuration
@@ -438,7 +429,7 @@ sudo chown -R $USER:$USER config downloads
 
 The configuration file is located at:
 - **Docker**: `./config/audiobook-dl.toml`
-- **Manual**: `./config/audiobook-dl.toml` or as specified in `.env`
+- **Manual**: `./config/audiobook-dl.toml` or the configured `CONFIG_DIR`
 
 You can edit this file manually if needed.
 

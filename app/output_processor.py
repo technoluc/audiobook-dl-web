@@ -14,6 +14,77 @@ logger = logging.getLogger(__name__)
 
 # Constants
 AUDIO_EXTENSIONS = [".m4b", ".mp3", ".m4a"]
+
+
+def normalize_audiobookshelf_metadata(file_path: str) -> dict[str, str] | None:
+    """Normalize MP4 tags after all audiobook-dl/ffmpeg processing is finished.
+
+    Audiobookshelf treats the MP4 album tag as the book title.  audiobook-dl
+    traditionally stores the series in that tag, so series books are imported
+    with the series name as their title.  Preserve that value as dedicated
+    series metadata, then make album match the actual title.
+
+    Returns the tags written for logging/testing, or ``None`` for unsupported
+    files or files without a title.
+    """
+    if Path(file_path).suffix.lower() not in {".m4b", ".m4a", ".mp4"}:
+        return None
+
+    try:
+        from mutagen.mp4 import MP4
+
+        audio = MP4(file_path)
+        if audio.tags is None:
+            audio.add_tags()
+
+        title_values = audio.tags.get("\xa9nam", [])
+        if not title_values or not str(title_values[0]).strip():
+            logger.warning("Cannot normalize metadata without an MP4 title tag: %s", file_path)
+            return None
+
+        title = str(title_values[0]).strip()
+        album_values = audio.tags.get("\xa9alb", [])
+        album = str(album_values[0]).strip() if album_values else ""
+
+        series_key = "----:com.apple.iTunes:Series"
+        series_part_key = "----:com.apple.iTunes:Series-Part"
+        existing_series = audio.tags.get(series_key, [])
+
+        # In unpatched audiobook-dl output, album contains the series name.
+        if album and album != title and not existing_series:
+            audio.tags[series_key] = [album.encode("utf-8")]
+
+        track_values = audio.tags.get("trkn", [])
+        if track_values and not audio.tags.get(series_part_key):
+            track = track_values[0]
+            track_number = track[0] if isinstance(track, tuple) else track
+            if track_number:
+                audio.tags[series_part_key] = [str(track_number).encode("utf-8")]
+
+        audio.tags["\xa9alb"] = [title]
+        audio.save()
+
+        written = {"title": title, "album": title}
+        series_values = audio.tags.get(series_key, [])
+        if series_values:
+            value = series_values[0]
+            written["series"] = (
+                value.decode("utf-8", errors="replace") if isinstance(value, bytes) else str(value)
+            )
+        series_part_values = audio.tags.get(series_part_key, [])
+        if series_part_values:
+            value = series_part_values[0]
+            written["series_part"] = (
+                value.decode("utf-8", errors="replace") if isinstance(value, bytes) else str(value)
+            )
+
+        logger.info("Audiobookshelf metadata normalized for %s: %s", file_path, written)
+        return written
+    except Exception as e:
+        logger.exception("Failed to normalize Audiobookshelf metadata for %s: %s", file_path, e)
+        return None
+
+
 SAVE_KEYWORDS = [
     "saved to",
     "written to",

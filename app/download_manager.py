@@ -338,6 +338,13 @@ class DownloadManager:
                     except Exception as e:
                         logger.warning(f"Task {task.task_id}: Failed to unwrap staging dir: {e}")
 
+                # Normalize the final file only after audiobook-dl has finished all
+                # metadata, chapter and cover processing. Audiobookshelf uses the
+                # MP4 album tag as the book title, while upstream audiobook-dl uses
+                # it for the series name.
+                if task.output_file:
+                    output_processor.normalize_audiobookshelf_metadata(task.output_file)
+
                 # Extract metadata from the file
                 if task.output_file:
                     logger.info(f"Extracting metadata for: {task.output_file}")
@@ -547,6 +554,8 @@ class DownloadManager:
         if output_file:
             try:
                 old_output_path = Path(output_file)
+                if not old_output_path.is_absolute():
+                    old_output_path = self.downloads_dir / old_output_path
             except Exception:
                 old_output_path = None
 

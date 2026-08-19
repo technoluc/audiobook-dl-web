@@ -7,6 +7,73 @@ import pytest
 from app import output_processor
 
 
+def test_normalize_audiobookshelf_metadata_preserves_series(monkeypatch):
+    class FakeMP4:
+        def __init__(self, _path):
+            self.tags = {
+                "\xa9nam": ["Stil maar"],
+                "\xa9alb": ["Gina Harte"],
+                "trkn": [(1, 0)],
+            }
+            self.saved = False
+
+        def save(self):
+            self.saved = True
+
+    audio = FakeMP4("unused")
+    monkeypatch.setattr("mutagen.mp4.MP4", lambda _path: audio)
+
+    result = output_processor.normalize_audiobookshelf_metadata("Stil maar.m4b")
+
+    assert result == {
+        "title": "Stil maar",
+        "album": "Stil maar",
+        "series": "Gina Harte",
+        "series_part": "1",
+    }
+    assert audio.tags["\xa9nam"] == ["Stil maar"]
+    assert audio.tags["\xa9alb"] == ["Stil maar"]
+    assert audio.tags["----:com.apple.iTunes:series"] == [b"Gina Harte"]
+    assert audio.tags["----:com.apple.iTunes:series-part"] == [b"1"]
+    assert audio.saved is True
+
+
+def test_normalize_audiobookshelf_metadata_keeps_existing_series(monkeypatch):
+    class FakeMP4:
+        def __init__(self, _path):
+            self.tags = {
+                "\xa9nam": ["Book title"],
+                "\xa9alb": ["Wrong album"],
+                "----:com.apple.iTunes:series": [b"Correct series"],
+                "----:com.apple.iTunes:series-part": [b"2.5"],
+            }
+
+        def save(self):
+            pass
+
+    audio = FakeMP4("unused")
+    monkeypatch.setattr("mutagen.mp4.MP4", lambda _path: audio)
+
+    result = output_processor.normalize_audiobookshelf_metadata("book.m4a")
+
+    assert result == {
+        "title": "Book title",
+        "album": "Book title",
+        "series": "Correct series",
+        "series_part": "2.5",
+    }
+    assert audio.tags["----:com.apple.iTunes:series"] == [b"Correct series"]
+
+
+def test_normalize_audiobookshelf_metadata_ignores_non_mp4(monkeypatch):
+    def fail_if_called(_path):
+        raise AssertionError("MP4 must not be opened for an MP3 file")
+
+    monkeypatch.setattr("mutagen.mp4.MP4", fail_if_called)
+
+    assert output_processor.normalize_audiobookshelf_metadata("book.mp3") is None
+
+
 def test_find_output_file_in_lines_parses_output_keyword(tmp_path: Path):
     downloads_dir = tmp_path
     p = downloads_dir / "out.m4b"

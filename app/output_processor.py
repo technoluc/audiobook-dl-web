@@ -14,6 +14,78 @@ logger = logging.getLogger(__name__)
 
 # Constants
 AUDIO_EXTENSIONS = [".m4b", ".mp3", ".m4a"]
+
+MP4_TITLE_TAG = "\xa9nam"
+MP4_ALBUM_TAG = "\xa9alb"
+MP4_TRACK_TAG = "trkn"
+MP4_SERIES_TAG = "----:com.apple.iTunes:series"
+MP4_SERIES_PART_TAG = "----:com.apple.iTunes:series-part"
+
+
+def normalize_audiobookshelf_metadata(file_path: str | Path) -> dict[str, str] | None:
+    """Write Audiobookshelf-compatible title and series tags to an MP4 audiobook.
+
+    audiobook-dl may store the series name in the MP4 album field. Audiobookshelf
+    can then import that album value as the book title. Preserve the old album as
+    the series, copy the actual title to album, and derive the series part from
+    the track number when necessary.
+    """
+    path = Path(file_path)
+    if path.suffix.lower() not in {".m4b", ".m4a", ".mp4"}:
+        return None
+
+    try:
+        from mutagen.mp4 import MP4
+
+        audio = MP4(path)
+        if audio.tags is None:
+            logger.warning("Cannot normalize MP4 metadata without tags: %s", path)
+            return None
+
+        title_values = audio.tags.get(MP4_TITLE_TAG, [])
+        title = str(title_values[0]).strip() if title_values else ""
+        if not title:
+            logger.warning("Cannot normalize MP4 metadata without a title: %s", path)
+            return None
+
+        album_values = audio.tags.get(MP4_ALBUM_TAG, [])
+        album = str(album_values[0]).strip() if album_values else ""
+
+        if album and album != title and not audio.tags.get(MP4_SERIES_TAG):
+            audio.tags[MP4_SERIES_TAG] = [album.encode("utf-8")]
+
+        track_values = audio.tags.get(MP4_TRACK_TAG, [])
+        if track_values and not audio.tags.get(MP4_SERIES_PART_TAG):
+            track = track_values[0]
+            track_number = track[0] if isinstance(track, tuple) else track
+            if track_number:
+                audio.tags[MP4_SERIES_PART_TAG] = [str(track_number).encode("utf-8")]
+
+        audio.tags[MP4_TITLE_TAG] = [title]
+        audio.tags[MP4_ALBUM_TAG] = [title]
+        audio.save()
+
+        normalized = {"title": title, "album": title}
+        for output_key, tag_key in (
+            ("series", MP4_SERIES_TAG),
+            ("series_part", MP4_SERIES_PART_TAG),
+        ):
+            values = audio.tags.get(tag_key, [])
+            if values:
+                value = values[0]
+                normalized[output_key] = (
+                    value.decode("utf-8", errors="replace")
+                    if isinstance(value, bytes)
+                    else str(value)
+                )
+
+        logger.info("Normalized Audiobookshelf metadata for %s: %s", path, normalized)
+        return normalized
+    except Exception:
+        logger.exception("Failed to normalize Audiobookshelf metadata for %s", path)
+        return None
+
+
 SAVE_KEYWORDS = [
     "saved to",
     "written to",

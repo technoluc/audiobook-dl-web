@@ -167,3 +167,24 @@ def test_unwrap_staging_dir_moves_single_file(tmp_path: Path):
     assert Path(new_output).exists()
     assert (downloads_dir / "out.m4b").exists()
     assert not staging_dir.exists()
+
+
+def test_unwrap_staging_dir_updates_relative_output_file(tmp_path: Path):
+    config_dir = tmp_path / "config"
+    downloads_dir = tmp_path / "downloads"
+    config_dir.mkdir(parents=True)
+
+    dm = DownloadManager(str(config_dir), str(downloads_dir))
+
+    staging_dir = downloads_dir / "__task_relative__"
+    staging_dir.mkdir(parents=True)
+    staged_audio = staging_dir / "Stil maar.m4b"
+    staged_audio.write_bytes(b"x")
+
+    relative_output = "__task_relative__/Stil maar.m4b"
+    new_output, search_root = dm._unwrap_staging_dir(staging_dir, relative_output)
+
+    assert search_root == downloads_dir
+    assert new_output == str(downloads_dir / "Stil maar.m4b")
+    assert Path(new_output).exists()
+    assert not staging_dir.exists()

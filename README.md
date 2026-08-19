@@ -89,13 +89,29 @@ The application will be available at `http://localhost:8000`
 
 #### Docker Volumes
 
-The Docker Compose configuration creates three important volumes:
+The Docker Compose configuration creates four important volumes:
 
 - `./config` - Stores `audiobook-dl.toml` configuration file with credentials
 - `./downloads` - Stores downloaded audiobooks
 - `./logs` - Stores application logs with timestamps
+- `/data/media/audiobooks` - Final audiobook destination, mounted at `/audiobooks` in the container
 
 These directories are automatically created and persisted on your host machine.
+
+The NAS host path is configured directly in `docker-compose.yml`:
+
+```yaml
+volumes:
+  - /data/media/audiobooks:/audiobooks
+```
+
+Change the left side if your NAS is mounted elsewhere on the Docker host. Then start the container
+normally with `docker compose up -d` and enable **Move completed audiobooks** in Settings with
+`/audiobooks` as the destination.
+
+The app downloads and converts in `/app/downloads` first. It then copies the completed audio file
+with `rsync`, verifies the destination file, and only then removes the local source. If the mount is
+unavailable or the transfer fails, the task is marked failed and the local file is retained.
 
 ### TrueNAS CE Installation
 
@@ -103,7 +119,7 @@ Deploy `audiobook-dl-web` as a custom app in TrueNAS Community Edition:
 
 #### 1. Prepare Storage
 
-Create datasets for the deployed app via the UI: **Datasets** → **Add Dataset** (create one parent `audiobook-dl-web` and three children datasets: `config`, `downloads`, `logs`), can be of `Generic` type.
+Create datasets for the deployed app via the UI: **Datasets** → **Add Dataset** (create one parent `audiobook-dl-web` and three children datasets: `config`, `downloads`, `logs`), can be of `Generic` type. The final audiobook library can be an existing dataset.
 
 #### 2. Install Custom App
 
@@ -135,10 +151,14 @@ Create datasets for the deployed app via the UI: **Datasets** → **Add Dataset*
   - Protocol: `TCP`
 
 **Storage:**
-- Add three Host Path volumes (click **Add** for each):
+- Add four Host Path volumes (click **Add** for each):
   1. Host Path: `/mnt/tank/audiobook-dl-web/config`, Mount Path: `/app/config`
   2. Host Path: `/mnt/tank/audiobook-dl-web/downloads`, Mount Path: `/app/downloads`
   3. Host Path: `/mnt/tank/audiobook-dl-web/logs`, Mount Path: `/app/logs`
+  4. Host Path: `/mnt/tank/media/audiobooks`, Mount Path: `/audiobooks`
+
+After installation, open **Settings**, enter `/audiobooks` as the final destination, and enable
+**Move completed audiobooks to a final destination**.
 
 **Resources Configuration:**
 - CPU: `2` (2 CPUs) - adjust based on your needs
@@ -168,11 +188,11 @@ source venv/bin/activate  # Linux/macOS
 # Install dependencies
 pip install -e .
 
-# Install ffmpeg (required for combining audio files)
+# Install ffmpeg (required for combining audio files) and rsync (required for optional transfers)
 # On Ubuntu/Debian:
-sudo apt-get install ffmpeg
+sudo apt-get install ffmpeg rsync
 # On macOS:
-brew install ffmpeg
+brew install ffmpeg rsync
 # On Windows:
 winget install -e Gyan.FFmpeg
 
@@ -187,6 +207,10 @@ cp .env.example .env  # Linux/macOS
 # Start the application
 python -m app.main  # Or on Windows PowerShell: .\start.ps1
 ```
+
+On Windows, the optional post-processing transfer also requires an `rsync`-compatible executable
+on `PATH` (for example by running the app in WSL). Downloads continue to work without it when
+move-after-completion is disabled.
 
 The application will be available at `http://localhost:8000`
 
@@ -231,6 +255,8 @@ Navigate to **Settings** to configure:
 - **Create folder for downloaded books** - When enabled, each audiobook will be downloaded to a dedicated folder named using the output template (default: disabled)
 - **Group by author** - When enabled, downloads are placed under an author directory in the downloads folder
 - **Maximum concurrent downloads** - Control how many audiobooks download simultaneously (1-10, default: 2)
+- **Move completed audiobooks** - Optionally transfer completed audio files to a mounted NAS or other final destination
+- **Final destination path** - Absolute path available to the app (for example `/audiobooks` in Docker)
 - View current configuration
 
 ![Settings Page](docs/settings.png)
@@ -266,6 +292,8 @@ skip_downloaded = true
 create_folder = false
 group_by_author = false
 max_concurrent_downloads = 2
+move_after_completion = true
+destination_path = "/audiobooks"
 
 # Service credentials
 [sources.storytel]

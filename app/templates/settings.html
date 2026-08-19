@@ -79,6 +79,32 @@
                         </div>
                     </div>
 
+                    <hr class="my-4">
+                    <h6>Post-processing</h6>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="move_after_completion"
+                            name="move_after_completion" {% if config.move_after_completion %}checked{% endif %}>
+                        <label class="form-check-label" for="move_after_completion">
+                            Move completed audiobooks to a final destination
+                        </label>
+                        <div class="form-text">
+                            After download and conversion, the finished audio file is copied with rsync. The local
+                            source is removed only after a successful, verified transfer.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="destination_path" class="form-label">Final destination path</label>
+                        <input type="text" class="form-control" id="destination_path" name="destination_path"
+                            value="{{ config.destination_path if config.destination_path else '' }}"
+                            placeholder="/audiobooks">
+                        <div class="form-text">
+                            Use a path available to the application. For Docker, mount the NAS into the container
+                            and enter the container path here (for example <code>/audiobooks</code>).
+                        </div>
+                    </div>
+
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-save"></i> Save Settings
                     </button>

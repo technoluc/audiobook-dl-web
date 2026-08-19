@@ -5,6 +5,7 @@
 const STATUS_ICONS = {
     pending: 'clock',
     downloading: 'arrow-down-circle',
+    transferring: 'arrow-left-right',
     completed: 'check-circle',
     failed: 'x-circle',
     cancelled: 'dash-circle'
@@ -13,6 +14,7 @@ const STATUS_ICONS = {
 const STATUS_COLORS = {
     pending: 'secondary',
     downloading: 'primary',
+    transferring: 'info',
     completed: 'success',
     failed: 'danger',
     cancelled: 'warning'
@@ -113,7 +115,9 @@ async function loadTasks() {
         lastTasksJson = currentTasksJson;
 
         // Check if all downloads just finished
-        const downloadingCount = data.tasks.filter(t => t.status === 'downloading' || t.status === 'pending').length;
+        const downloadingCount = data.tasks.filter(t =>
+            t.status === 'downloading' || t.status === 'transferring' || t.status === 'pending'
+        ).length;
         const completedCount = data.tasks.filter(t => t.status === 'completed').length;
         const totalCount = data.tasks.length;
 
@@ -210,8 +214,8 @@ function displayTasks(tasks) {
 
     // Sort tasks: active first, then by start time
     tasks.sort((a, b) => {
-        const statusOrder = { downloading: 0, pending: 1, completed: 2, failed: 3, cancelled: 4 };
-        const statusDiff = (statusOrder[a.status] || 5) - (statusOrder[b.status] || 5);
+        const statusOrder = { transferring: 0, downloading: 1, pending: 2, completed: 3, failed: 4, cancelled: 5 };
+        const statusDiff = (statusOrder[a.status] ?? 6) - (statusOrder[b.status] ?? 6);
         if (statusDiff !== 0) return statusDiff;
 
         return new Date(b.started_at || 0) - new Date(a.started_at || 0);
@@ -311,13 +315,15 @@ function extractServiceName(url) {
 
 // Create progress bar HTML
 function createProgressBar(task) {
-    if (task.status !== 'downloading' && task.status !== 'completed') {
+    if (task.status !== 'downloading' && task.status !== 'transferring' && task.status !== 'completed') {
         return '';
     }
 
     const progressWidth = task.status === 'completed' ? 100 : task.progress;
     const color = STATUS_COLORS[task.status];
-    const animated = task.status === 'downloading' ? 'progress-bar-animated' : '';
+    const animated = task.status === 'downloading' || task.status === 'transferring'
+        ? 'progress-bar-animated'
+        : '';
 
     return `
         <div class="mb-2">
@@ -348,18 +354,33 @@ function createErrorDisplay(error) {
 }
 
 // Create file path display HTML
-function createFilePathDisplay(outputFile, status) {
-    if (!outputFile || status !== 'completed') return '';
+function createFilePathDisplay(task) {
+    if (!task.output_file) return '';
+
+    const isRetainedAfterFailure = task.status === 'failed' && task.transfer_destination;
+    if (task.status !== 'completed' && !isRetainedAfterFailure) return '';
+
+    const label = isRetainedAfterFailure ? 'Local file retained:' : 'Final file:';
 
     return `
         <div class="alert alert-info mt-2 mb-2 file-path-alert">
             <div class="d-flex align-items-start">
                 <i class="bi bi-file-earmark-check fs-4 me-2 flex-shrink-0"></i>
                 <div class="flex-grow-1">
-                    <strong class="d-block mb-1">Downloaded File:</strong>
-                    <code class="file-path-code">${escapeHtml(outputFile)}</code>
+                    <strong class="d-block mb-1">${label}</strong>
+                    <code class="file-path-code">${escapeHtml(task.output_file)}</code>
                 </div>
             </div>
+        </div>
+    `;
+}
+
+function createTransferDestinationDisplay(task) {
+    if (!task.transfer_destination || task.status !== 'transferring') return '';
+    return `
+        <div class="alert alert-info mt-2 mb-2">
+            <strong><i class="bi bi-hdd-network"></i> Copying to:</strong><br>
+            <code class="file-path-code">${escapeHtml(task.transfer_destination)}</code>
         </div>
     `;
 }
@@ -369,7 +390,9 @@ function createTaskCard(task) {
     const icon = STATUS_ICONS[task.status] || 'circle';
     const color = STATUS_COLORS[task.status] || 'secondary';
     const serviceName = extractServiceName(task.url);
-    const downloadingClass = task.status === 'downloading' ? 'downloading-indicator' : '';
+    const downloadingClass = task.status === 'downloading' || task.status === 'transferring'
+        ? 'downloading-indicator'
+        : '';
 
     return `
         <div class="card mb-3 task-card status-${task.status}" data-task-id="${task.task_id}">
@@ -412,7 +435,8 @@ function createTaskCard(task) {
                     <small class="text-muted d-block mb-2">${escapeHtml(task.message)}</small>
                     ${createProgressBar(task)}
                     ${createErrorDisplay(task.error)}
-                    ${createFilePathDisplay(task.output_file, task.status)}
+                    ${createTransferDestinationDisplay(task)}
+                    ${createFilePathDisplay(task)}
                     ${formatTimestamp(task)}
                 </div>
             </div>

@@ -9,6 +9,8 @@ services:
       - ./config:/app/config
       # Downloads volume (stores downloaded audiobooks)
       - ./downloads:/app/downloads
+      # Final audiobook destination (host/NAS path -> path inside the container)
+      - /data/media/audiobooks:/audiobooks
       # Logs volume (stores application logs)
       - ./logs:/app/logs
     environment:

@@ -267,6 +267,7 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
             name="settings.html",
             context=context,
         )
+
     @router.post("/settings")
     async def update_settings(
         output_template: str | None = Form(None),
@@ -274,21 +275,37 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
         max_concurrent_downloads: int = Form(2),
         create_folder: bool = Form(False),
         group_by_author: bool = Form(False),
+        move_after_completion: bool = Form(False),
+        destination_path: str | None = Form(None),
     ):
         """Update global settings"""
+        destination_path = destination_path.strip() if destination_path else ""
+        if move_after_completion and not destination_path:
+            raise HTTPException(
+                status_code=400,
+                detail="A destination path is required when move after completion is enabled",
+            )
+        if move_after_completion and not Path(destination_path).is_absolute():
+            raise HTTPException(
+                status_code=400,
+                detail="The destination path must be absolute",
+            )
+
         success = config_manager.update_global_settings(
             output_template=output_template if output_template else None,
             skip_downloaded=skip_downloaded,
             max_concurrent_downloads=max_concurrent_downloads,
             create_folder=create_folder,
             group_by_author=group_by_author,
+            move_after_completion=move_after_completion,
+            destination_path=destination_path,
         )
 
         if success:
             # Reload download manager config to apply new max concurrent downloads
             download_manager.reload_config()
             logger.info(
-                f"Settings updated - output_template: {output_template}, skip_downloaded: {skip_downloaded}, max_concurrent_downloads: {max_concurrent_downloads}, create_folder: {create_folder}, group_by_author: {group_by_author}"
+                f"Settings updated - output_template: {output_template}, skip_downloaded: {skip_downloaded}, max_concurrent_downloads: {max_concurrent_downloads}, create_folder: {create_folder}, group_by_author: {group_by_author}, move_after_completion: {move_after_completion}, destination_path: {destination_path}"
             )
             return RedirectResponse(
                 url="/settings?success=true", status_code=status.HTTP_303_SEE_OTHER

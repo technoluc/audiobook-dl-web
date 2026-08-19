@@ -166,6 +166,9 @@ class ConfigManager:
         group_by_author: bool | None = None,
         move_after_completion: bool | None = None,
         destination_path: str | None = None,
+        ebook_output_template: str | None = None,
+        move_ebooks_after_completion: bool | None = None,
+        ebook_destination_path: str | None = None,
     ) -> bool:
         """
         Update global audiobook-dl settings
@@ -192,6 +195,9 @@ class ConfigManager:
             "group_by_author": group_by_author,
             "move_after_completion": move_after_completion,
             "destination_path": destination_path,
+            "ebook_output_template": ebook_output_template,
+            "move_ebooks_after_completion": move_ebooks_after_completion,
+            "ebook_destination_path": ebook_destination_path,
         }
 
         changes = []

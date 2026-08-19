@@ -28,11 +28,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // Load existing tasks
     loadTasks();
 
-    // Setup form handler
-    const form = document.getElementById('downloadForm');
-    if (form) {
+    // Audiobooks and e-books deliberately use separate forms.
+    document.querySelectorAll('.download-form').forEach(form => {
         form.addEventListener('submit', handleFormSubmit);
-    }
+    });
 
     // Setup clear completed button
     const clearBtn = document.getElementById('clearCompleted');
@@ -362,13 +361,17 @@ function createFilePathDisplay(task) {
 
     const label = isRetainedAfterFailure ? 'Local file retained:' : 'Final file:';
 
+    const files = task.output_files && task.output_files.length > 1
+        ? task.output_files.map(file => `<code class="file-path-code d-block">${escapeHtml(file)}</code>`).join('')
+        : `<code class="file-path-code">${escapeHtml(task.output_file)}</code>`;
+
     return `
         <div class="alert alert-info mt-2 mb-2 file-path-alert">
             <div class="d-flex align-items-start">
                 <i class="bi bi-file-earmark-check fs-4 me-2 flex-shrink-0"></i>
                 <div class="flex-grow-1">
                     <strong class="d-block mb-1">${label}</strong>
-                    <code class="file-path-code">${escapeHtml(task.output_file)}</code>
+                    ${files}
                 </div>
             </div>
         </div>
@@ -390,6 +393,8 @@ function createTaskCard(task) {
     const icon = STATUS_ICONS[task.status] || 'circle';
     const color = STATUS_COLORS[task.status] || 'secondary';
     const serviceName = extractServiceName(task.url);
+    const mediaType = task.media_type === 'ebook' ? 'E-BOOK' : 'AUDIOBOOK';
+    const mediaIcon = task.media_type === 'ebook' ? 'book' : 'headphones';
     const downloadingClass = task.status === 'downloading' || task.status === 'transferring'
         ? 'downloading-indicator'
         : '';
@@ -403,11 +408,12 @@ function createTaskCard(task) {
                             <i class="bi bi-chevron-up collapse-chevron" onclick="toggleTaskCard('${task.task_id}')" style="cursor: pointer;" title="Collapse/Expand"></i>
                             <i class="bi bi-${icon} text-${color} ${downloadingClass}"></i>
                             <span class="status-badge badge bg-${color}">${task.status.toUpperCase()}</span>
+                            <span class="badge bg-dark"><i class="bi bi-${mediaIcon}"></i> ${mediaType}</span>
                             <span class="badge bg-secondary">${serviceName}</span>
                         </h6>
                         <p class="task-url mb-1 url-clickable" 
                            data-url="${escapeHtml(task.url)}" 
-                           onclick="copyUrlToInput('${escapeHtml(task.url)}')"
+                           onclick="copyUrlToInput('${escapeHtml(task.url)}', '${task.media_type || 'audiobook'}')"
                            title="Click to re-add this URL to the download form">
                             ${escapeHtml(truncateUrl(task.url, 80))}
                         </p>
@@ -425,7 +431,7 @@ function createTaskCard(task) {
                             </button>
                         ` : ''}
                         ${task.status === 'failed' ? `
-                            <button class="btn btn-sm btn-outline-primary" onclick="retryTask('${escapeHtml(task.url)}')" title="Retry download">
+                            <button class="btn btn-sm btn-outline-primary" onclick="retryTask('${escapeHtml(task.url)}', '${task.media_type || 'audiobook'}')" title="Retry download">
                                 <i class="bi bi-arrow-clockwise"></i> Retry
                             </button>
                         ` : ''}
@@ -495,8 +501,9 @@ function createMetadataDisplay(metadata) {
 }
 
 // Add URL to input field with optional message
-function addUrlToInput(url, message = 'URL added to download form') {
-    const urlsTextarea = document.getElementById('urls');
+function addUrlToInput(url, mediaType = 'audiobook', message = 'URL added to download form') {
+    const fieldId = mediaType === 'ebook' ? 'ebookUrls' : 'audiobookUrls';
+    const urlsTextarea = document.getElementById(fieldId);
     if (!urlsTextarea) return;
 
     // Add the URL to the textarea
@@ -514,13 +521,13 @@ function addUrlToInput(url, message = 'URL added to download form') {
 }
 
 // Retry a failed download
-function retryTask(url) {
-    addUrlToInput(url, 'URL added to download form. Click "Start Download" when ready.');
+function retryTask(url, mediaType = 'audiobook') {
+    addUrlToInput(url, mediaType, 'URL added to the matching form. Start it when ready.');
 }
 
 // Copy URL to input field
-function copyUrlToInput(url) {
-    addUrlToInput(url, 'URL added to download form');
+function copyUrlToInput(url, mediaType = 'audiobook') {
+    addUrlToInput(url, mediaType, 'URL added to the matching download form');
 }
 
 // Clear completed tasks
@@ -598,7 +605,7 @@ function startPolling() {
 function adjustPolling(activeTaskCount, tasks = []) {
     // Check if any completed tasks are missing metadata
     const completedWithoutMetadata = tasks.some(task =>
-        task.status === 'completed' && !task.metadata
+        task.status === 'completed' && task.media_type !== 'ebook' && !task.metadata
     );
 
     // Stop polling if:

@@ -10,7 +10,9 @@ services:
       # Downloads volume (stores downloaded audiobooks)
       - ./downloads:/app/downloads
       # Final audiobook destination (host/NAS path -> path inside the container)
-      - /data/media/audiobooks:/audiobooks
+      - ${AUDIOBOOKS_PATH:-./completed/audiobooks}:/audiobooks
+      # Final ebook destination (host/NAS path -> path inside the container)
+      - ${EBOOKS_PATH:-./completed/ebooks}:/ebooks
       # Logs volume (stores application logs)
       - ./logs:/app/logs
     environment:

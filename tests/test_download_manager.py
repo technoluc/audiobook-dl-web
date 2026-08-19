@@ -55,6 +55,68 @@ max_concurrent_downloads = 2
     assert out_path.endswith("/__task_123__/{author}/{title} - {author}/{title} - {author}")
 
 
+def test_build_ebook_command_reuses_credentials_and_masks_password(tmp_path: Path):
+    config_dir = tmp_path / "config"
+    downloads_dir = tmp_path / "downloads"
+    _write_config(
+        config_dir,
+        """
+ebook_output_template = "{authors}/{title}.{ext}"
+
+[sources.nextory]
+username = "reader@example.com"
+password = "top-secret"
+""".lstrip(),
+    )
+    dm = DownloadManager(str(config_dir), str(downloads_dir))
+
+    cmd = dm._build_ebook_command(
+        "https://nextory.com/book/example",
+        output_template=None,
+        output_format="epub",
+        base_dir=downloads_dir / "__task_ebook__",
+    )
+
+    assert cmd[0] == "grawlix"
+    assert cmd[cmd.index("--username") + 1] == "reader@example.com"
+    assert cmd[cmd.index("--password") + 1] == "top-secret"
+    assert cmd[cmd.index("--output") + 1].endswith("/{authors}/{title}.epub")
+    assert "top-secret" not in dm._redact_command(cmd)
+
+
+def test_publish_ebook_outputs_handles_multiple_files_and_conflicts(tmp_path: Path):
+    config_dir = tmp_path / "config"
+    downloads_dir = tmp_path / "downloads"
+    config_dir.mkdir()
+    dm = DownloadManager(str(config_dir), str(downloads_dir))
+
+    existing = downloads_dir / "Author" / "Book.epub"
+    existing.parent.mkdir(parents=True)
+    existing.write_bytes(b"old")
+    staging = downloads_dir / "__task_books__"
+    (staging / "Author").mkdir(parents=True)
+    (staging / "Author" / "Book.epub").write_bytes(b"new")
+    (staging / "Other.cbz").write_bytes(b"comic")
+
+    published = [Path(path) for path in dm._publish_ebook_outputs(staging)]
+
+    assert len(published) == 2
+    assert existing.read_bytes() == b"old"
+    assert (downloads_dir / "Author" / "Book (2).epub").read_bytes() == b"new"
+    assert (downloads_dir / "Other.cbz").read_bytes() == b"comic"
+    assert not staging.exists()
+
+
+def test_download_task_serializes_media_type_and_multiple_outputs():
+    task = DownloadTask("https://example.invalid/book", "ebook", media_type="ebook")
+    task.output_files = ["/downloads/one.epub", "/downloads/two.epub"]
+
+    serialized = task.to_dict()
+
+    assert serialized["media_type"] == "ebook"
+    assert serialized["output_files"] == task.output_files
+
+
 def test_unwrap_staging_dir_moves_single_dir_and_updates_output_file(tmp_path: Path):
     config_dir = tmp_path / "config"
     downloads_dir = tmp_path / "downloads"
@@ -255,3 +317,35 @@ async def test_transfer_failure_keeps_local_source(tmp_path: Path, monkeypatch):
 
     assert source.read_bytes() == b"audiobook"
     assert task.output_file == str(source)
+
+
+@pytest.mark.asyncio
+async def test_ebook_transfer_uses_separate_destination_and_preserves_folders(
+    tmp_path: Path, monkeypatch
+):
+    config_dir = tmp_path / "config"
+    downloads_dir = tmp_path / "downloads"
+    destination = tmp_path / "ebooks"
+    config_dir.mkdir()
+    destination.mkdir()
+    dm = DownloadManager(str(config_dir), str(downloads_dir))
+    dm.ebook_destination_path = str(destination)
+
+    source = downloads_dir / "Author" / "book.epub"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"ebook")
+    task = DownloadTask("https://example.invalid/book", "ebook-transfer", "ebook")
+    task.output_file = str(source)
+    task.output_files = [str(source)]
+
+    async def fake_rsync(*cmd, **_kwargs):
+        shutil.copyfile(Path(cmd[-2]), Path(cmd[-1]) / Path(cmd[-2]).name)
+        return _FakeProcess(0, [b" 100%\n"], [])
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_rsync)
+    await dm._transfer_completed_output(task)
+
+    expected = destination / "Author" / "book.epub"
+    assert expected.read_bytes() == b"ebook"
+    assert task.output_file == str(expected)
+    assert task.output_files == [str(expected)]

@@ -43,6 +43,24 @@ RUN curl -L \
 # Required by the Nextory cover patch
 RUN pip install --no-cache-dir python-dateutil
 
+# Install the patched Grawlix fork for e-book downloads. The released PyPI
+# package is retained as a normal dependency for non-Docker installations.
+RUN curl -L \
+        https://github.com/technoluc/grawlix/archive/refs/heads/master.tar.gz \
+        -o /tmp/grawlix.tar.gz && \
+    mkdir -p /tmp/grawlix-src && \
+    tar -xzf /tmp/grawlix.tar.gz \
+        -C /tmp/grawlix-src \
+        --strip-components=1 \
+        --no-same-owner \
+        --no-same-permissions && \
+    pip install --no-cache-dir --no-deps --force-reinstall \
+        /tmp/grawlix-src && \
+    cp -a \
+        /tmp/grawlix-src/grawlix/assets \
+        /usr/local/lib/python3.14/site-packages/grawlix/ && \
+    rm -rf /tmp/grawlix.tar.gz /tmp/grawlix-src
+
 # Apply Nextory WebP -> JPEG cover patch
 RUN python3 /app/patch_nextory.py
 

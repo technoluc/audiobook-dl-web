@@ -148,10 +148,7 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
 
     @router.get("/download", response_class=HTMLResponse)
     async def download_page(request: Request):
-        """Download page where users can paste audiobook URLs"""
-        if not config_manager.list_configured_sources():
-            return RedirectResponse(url="/configure", status_code=status.HTTP_303_SEE_OTHER)
-
+        """Download page for audiobook-dl and Grawlix downloads."""
         return templates.TemplateResponse(
             request=request,
             name="download.html",
@@ -165,6 +162,7 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
         no_chapters: bool = Form(False),
         output_format: str | None = Form(None),
         output_template: str | None = Form(None),
+        media_type: str = Form("audiobook"),
     ):
         """
         Start downloading audiobooks from provided URLs
@@ -180,6 +178,8 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
 
         if not url_list:
             raise HTTPException(status_code=400, detail="No URLs provided")
+        if media_type not in {"audiobook", "ebook"}:
+            raise HTTPException(status_code=400, detail="Invalid media type")
 
         logger.info(f"Adding {len(url_list)} URL(s) to download queue")
 
@@ -206,6 +206,7 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
                 combine=combine,
                 no_chapters=no_chapters,
                 output_format=output_format,
+                media_type=media_type,
             )
             tasks.append(task.to_dict())
             logger.info(f"Task added to queue - ID: {task_id}, URL: {url}")
@@ -277,6 +278,9 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
         group_by_author: bool = Form(False),
         move_after_completion: bool = Form(False),
         destination_path: str | None = Form(None),
+        ebook_output_template: str | None = Form(None),
+        move_ebooks_after_completion: bool = Form(False),
+        ebook_destination_path: str | None = Form(None),
     ):
         """Update global settings"""
         destination_path = destination_path.strip() if destination_path else ""
@@ -291,6 +295,20 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
                 detail="The destination path must be absolute",
             )
 
+        ebook_destination_path = (
+            ebook_destination_path.strip() if ebook_destination_path else ""
+        )
+        if move_ebooks_after_completion and not ebook_destination_path:
+            raise HTTPException(
+                status_code=400,
+                detail="An ebook destination path is required when ebook transfer is enabled",
+            )
+        if move_ebooks_after_completion and not Path(ebook_destination_path).is_absolute():
+            raise HTTPException(
+                status_code=400,
+                detail="The ebook destination path must be absolute",
+            )
+
         success = config_manager.update_global_settings(
             output_template=output_template if output_template else None,
             skip_downloaded=skip_downloaded,
@@ -299,6 +317,11 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
             group_by_author=group_by_author,
             move_after_completion=move_after_completion,
             destination_path=destination_path,
+            ebook_output_template=ebook_output_template
+            if ebook_output_template
+            else "{authors}/{title}.{ext}",
+            move_ebooks_after_completion=move_ebooks_after_completion,
+            ebook_destination_path=ebook_destination_path,
         )
 
         if success:

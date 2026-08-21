@@ -14,6 +14,9 @@ def test_update_global_settings_persists_group_by_author(tmp_path: Path):
         max_concurrent_downloads=3,
         move_after_completion=True,
         destination_path="/audiobooks",
+        ebook_output_template="{authors}/{title}.{ext}",
+        move_ebooks_after_completion=True,
+        ebook_destination_path="/ebooks",
     )
     assert ok is True
 
@@ -24,6 +27,9 @@ def test_update_global_settings_persists_group_by_author(tmp_path: Path):
     assert loaded["max_concurrent_downloads"] == 3
     assert loaded["move_after_completion"] is True
     assert loaded["destination_path"] == "/audiobooks"
+    assert loaded["ebook_output_template"] == "{authors}/{title}.{ext}"
+    assert loaded["move_ebooks_after_completion"] is True
+    assert loaded["ebook_destination_path"] == "/ebooks"
 
     # Ensure it is valid TOML on disk
     data = tomllib.loads(Path(cm.get_config_file_path()).read_text(encoding="utf-8"))

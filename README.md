@@ -1,6 +1,6 @@
 # audiobook-dl-web
 
-A modern, responsive web interface for [audiobook-dl](https://github.com/jo1gi/audiobook-dl) - download audiobooks from various online services through an easy-to-use web application.
+A modern, responsive web interface for [audiobook-dl](https://github.com/jo1gi/audiobook-dl) and [Grawlix](https://github.com/jo1gi/grawlix). Download audiobooks, e-books, and comics from various online services through one application.
 
 ![Python Version](https://img.shields.io/badge/python-3.14+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)
@@ -35,7 +35,9 @@ Open `http://localhost:8000`
 
 ## What Can You Do?
 
-**audiobook-dl-web** is a self-hosted web interface for [audiobook-dl](https://github.com/jo1gi/audiobook-dl), making it easy to download audiobooks from multiple services through your browser. Everything that audiobook-dl supports, this web interface supports too.
+**audiobook-dl-web** is a self-hosted interface for audiobook-dl and Grawlix. The download page has separate audiobook and e-book modes while both use a shared queue.
+
+**Download E-books with Grawlix**: Download e-books and comics as EPUB, CBZ, ACSM, or the source's automatic format. Credentials already configured for Storytel, Nextory, Saxo, and eReolen are reused by Grawlix.
 
 **Configure Your Services**: Set up login credentials for any audiobook service supported by `audiobook-dl`, including Storytel, Saxo, Nextory, eReolen, Podimo, YourCloudLibrary, Everand, and more. Your credentials are stored securely in a local configuration file, so you only need to enter them once.
 
@@ -75,12 +77,6 @@ The easiest way to run audiobook-dl-web is using Docker:
 git clone https://github.com/yourusername/audiobook-dl-web.git
 cd audiobook-dl-web
 
-# Copy the example environment file
-cp .env.example .env
-
-# Edit .env if needed (optional)
-nano .env
-
 # Start with docker-compose
 docker-compose up -d
 ```
@@ -89,25 +85,29 @@ The application will be available at `http://localhost:8000`
 
 #### Docker Volumes
 
-The Docker Compose configuration creates four important volumes:
+The Docker Compose configuration creates five important volumes:
 
 - `./config` - Stores `audiobook-dl.toml` configuration file with credentials
 - `./downloads` - Stores downloaded audiobooks
 - `./logs` - Stores application logs with timestamps
-- `/data/media/audiobooks` - Final audiobook destination, mounted at `/audiobooks` in the container
+- `./completed/audiobooks` - Default final audiobook destination, mounted at `/audiobooks` in the container
+- `./completed/ebooks` - Default final e-book destination, mounted at `/ebooks` in the container
 
 These directories are automatically created and persisted on your host machine.
 
-The NAS host path is configured directly in `docker-compose.yml`:
+The NAS host paths are configured directly in `docker-compose.yml`:
 
 ```yaml
 volumes:
-  - /data/media/audiobooks:/audiobooks
+  - ./completed/audiobooks:/audiobooks
+  - ./completed/ebooks:/ebooks
 ```
 
-Change the left side if your NAS is mounted elsewhere on the Docker host. Then start the container
-normally with `docker compose up -d` and enable **Move completed audiobooks** in Settings with
-`/audiobooks` as the destination.
+Change only the left side of each mapping when the NAS is mounted elsewhere on the Docker host.
+For example, use `/data/media/audiobooks:/audiobooks` and
+`/data/media/ebooks:/ebooks` when those NAS paths are available to Docker.
+Start with `docker compose up -d`. In Settings, use `/audiobooks` for completed audiobooks and
+`/ebooks` for completed e-books.
 
 The app downloads and converts in `/app/downloads` first. It then copies the completed audio file
 with `rsync`, verifies the destination file, and only then removes the local source. If the mount is
@@ -119,7 +119,7 @@ Deploy `audiobook-dl-web` as a custom app in TrueNAS Community Edition:
 
 #### 1. Prepare Storage
 
-Create datasets for the deployed app via the UI: **Datasets** → **Add Dataset** (create one parent `audiobook-dl-web` and three children datasets: `config`, `downloads`, `logs`), can be of `Generic` type. The final audiobook library can be an existing dataset.
+Create datasets for the deployed app via the UI: **Datasets** → **Add Dataset** (create one parent `audiobook-dl-web` and three children datasets: `config`, `downloads`, `logs`), can be of `Generic` type. The final audiobook and e-book libraries can be existing datasets.
 
 #### 2. Install Custom App
 
@@ -151,14 +151,15 @@ Create datasets for the deployed app via the UI: **Datasets** → **Add Dataset*
   - Protocol: `TCP`
 
 **Storage:**
-- Add four Host Path volumes (click **Add** for each):
+- Add five Host Path volumes (click **Add** for each):
   1. Host Path: `/mnt/tank/audiobook-dl-web/config`, Mount Path: `/app/config`
   2. Host Path: `/mnt/tank/audiobook-dl-web/downloads`, Mount Path: `/app/downloads`
   3. Host Path: `/mnt/tank/audiobook-dl-web/logs`, Mount Path: `/app/logs`
   4. Host Path: `/mnt/tank/media/audiobooks`, Mount Path: `/audiobooks`
+  5. Host Path: `/mnt/tank/media/ebooks`, Mount Path: `/ebooks`
 
-After installation, open **Settings**, enter `/audiobooks` as the final destination, and enable
-**Move completed audiobooks to a final destination**.
+After installation, open **Settings** and configure `/audiobooks` and `/ebooks` as the separate
+final destinations.
 
 **Resources Configuration:**
 - CPU: `2` (2 CPUs) - adjust based on your needs
@@ -200,10 +201,6 @@ winget install -e Gyan.FFmpeg
 mkdir -p config downloads logs  # Linux/macOS
 # On Windows PowerShell: New-Item -ItemType Directory -Path config, downloads, logs -Force
 
-# Copy environment file (optional)
-cp .env.example .env  # Linux/macOS
-# On Windows: copy .env.example .env
-
 # Start the application
 python -m app.main  # Or on Windows PowerShell: .\start.ps1
 ```
@@ -227,17 +224,19 @@ Your credentials are stored securely in `config/audiobook-dl.toml`.
 
 ![Service Configuration](docs/service-config.png)
 
-### 2. Download Audiobooks
+### 2. Download Audiobooks or E-books
 
 1. Navigate to **Download** in the menu
-2. Paste one or more audiobook URLs (one per line)
+2. Paste audiobook URLs in **Audiobook URLs** and e-book URLs in **E-book URLs**
+   - The fields are separate because the same service URL can represent both formats
+   - Paste the same URL in both fields when you want both versions
    - **Important for Storytel**: Make sure the book is added to your shelf before downloading!
-3. (Optional) Configure advanced options:
+4. (Optional) Configure advanced options:
    - Output template (e.g., `{author}/{series}/{title}`)
    - Output format (M4B, MP3, M4A)
    - Combine files into a single file
    - Include/exclude chapter information
-4. Click **Start Download**
+5. Start either form independently with **Download Audiobooks** or **Download E-books**
 5. Monitor progress in the download queue
 
 ![Download Queue](docs/downloads.png)
@@ -263,9 +262,9 @@ Navigate to **Settings** to configure:
 
 ## Configuration
 
-### Environment Variables
+### Docker environment
 
-The application can be configured using environment variables in `.env`:
+Container settings are kept directly in `docker-compose.yml`:
 
 ```bash
 # Server Configuration
@@ -432,7 +431,7 @@ sudo chown -R $USER:$USER config downloads
 
 The configuration file is located at:
 - **Docker**: `./config/audiobook-dl.toml`
-- **Manual**: `./config/audiobook-dl.toml` or as specified in `.env`
+- **Manual**: `./config/audiobook-dl.toml` or the configured `CONFIG_DIR`
 
 You can edit this file manually if needed.
 

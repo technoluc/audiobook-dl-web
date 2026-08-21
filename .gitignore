@@ -11,10 +11,12 @@ venv/
 .ruff_cache/
 
 # Application specific
-config/
+config/*
 downloads/
+completed/
 *.toml
 !pyproject.toml
+!config/audiobook-dl.toml
 cookies.txt
 .env
 *.log

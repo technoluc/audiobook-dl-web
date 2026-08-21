@@ -1,0 +1,10 @@
+output_template = "{author} {title}"
+skip_downloaded = false
+max_concurrent_downloads = 2
+create_folder = false
+group_by_author = false
+move_after_completion = true
+destination_path = "/audiobooks"
+ebook_output_template = "{authors}/{title}.{ext}"
+move_ebooks_after_completion = true
+ebook_destination_path = "/ebooks"

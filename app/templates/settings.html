@@ -17,7 +17,7 @@
         <!-- Global Settings -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0">Global audiobook-dl Settings</h5>
+                <h5 class="mb-0">Download Settings</h5>
             </div>
             <div class="card-body">
                 <form method="post" action="/settings">
@@ -102,6 +102,45 @@
                         <div class="form-text">
                             Use a path available to the application. For Docker, mount the NAS into the container
                             and enter the container path here (for example <code>/audiobooks</code>).
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h6><i class="bi bi-book"></i> Grawlix e-books</h6>
+
+                    <div class="mb-3">
+                        <label for="ebook_output_template" class="form-label">E-book output template</label>
+                        <input type="text" class="form-control" id="ebook_output_template"
+                            name="ebook_output_template"
+                            value="{{ config.ebook_output_template if config.ebook_output_template else '{authors}/{title}.{ext}' }}"
+                            placeholder="{authors}/{title}.{ext}">
+                        <div class="form-text">
+                            Available variables include {title}, {authors}, {series}, {index}, {publisher},
+                            {language} and {ext}.
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="move_ebooks_after_completion"
+                            name="move_ebooks_after_completion" {% if config.move_ebooks_after_completion %}checked{% endif %}>
+                        <label class="form-check-label" for="move_ebooks_after_completion">
+                            Move completed e-books to a final destination
+                        </label>
+                        <div class="form-text">
+                            E-books are copied separately from audiobooks. Author and series folders are retained.
+                            Local files are removed only after every copied file is verified.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="ebook_destination_path" class="form-label">E-book destination path</label>
+                        <input type="text" class="form-control" id="ebook_destination_path"
+                            name="ebook_destination_path"
+                            value="{{ config.ebook_destination_path if config.ebook_destination_path else '' }}"
+                            placeholder="/ebooks">
+                        <div class="form-text">
+                            For Docker, mount the NAS e-book library into the container and use its container path,
+                            for example <code>/ebooks</code>.
                         </div>
                     </div>
 

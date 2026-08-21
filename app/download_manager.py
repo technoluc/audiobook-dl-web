@@ -125,6 +125,8 @@ class DownloadManager:
 
         self.tasks: dict[str, DownloadTask] = {}
         self.active_downloads = 0
+        self.active_audiobook_downloads = 0
+        self.active_ebook_downloads = 0
         self._load_config()
 
     def _read_config(self) -> dict:
@@ -149,6 +151,7 @@ class DownloadManager:
         config = self._read_config()
 
         self.max_concurrent_downloads = config.get("max_concurrent_downloads", 2)
+        self.max_concurrent_ebook_downloads = config.get("max_concurrent_ebook_downloads", 2)
         self.create_folder = config.get("create_folder", False)
         self.group_by_author = config.get("group_by_author", False)
         self.default_output_template = config.get("output_template", "{title}")
@@ -164,6 +167,9 @@ class DownloadManager:
 
         # Ensure valid range (1-10)
         self.max_concurrent_downloads = max(1, min(10, self.max_concurrent_downloads))
+        self.max_concurrent_ebook_downloads = max(
+            1, min(10, self.max_concurrent_ebook_downloads)
+        )
 
     def reload_config(self):
         """Reload configuration settings from config file"""
@@ -224,11 +230,7 @@ class DownloadManager:
             no_chapters: Whether to exclude chapters
             output_format: Output file format
         """
-        # Wait if too many concurrent downloads
-        while self.active_downloads >= self.max_concurrent_downloads:
-            await asyncio.sleep(1)
-
-        self.active_downloads += 1
+        await self._acquire_download_slot(task.media_type)
         task.status = DownloadStatus.DOWNLOADING
         task.started_at = datetime.now()
         task.message = "Starting download..."
@@ -457,7 +459,32 @@ class DownloadManager:
                 f"Download failed with exception - Task: {task.task_id}, Error: {str(e)}{duration_msg}"
             )
         finally:
-            self.active_downloads -= 1
+            self._release_download_slot(task.media_type)
+
+    async def _acquire_download_slot(self, media_type: str) -> None:
+        """Wait for a slot in the media-specific concurrency pool.
+
+        The user-facing concurrent-download setting applies to audiobooks.
+        E-books use their own small pool so a fast EPUB download never waits
+        for long-running audio downloading or conversion.
+        """
+        if media_type == "ebook":
+            while self.active_ebook_downloads >= self.max_concurrent_ebook_downloads:
+                await asyncio.sleep(0.1)
+            self.active_ebook_downloads += 1
+        else:
+            while self.active_audiobook_downloads >= self.max_concurrent_downloads:
+                await asyncio.sleep(0.1)
+            self.active_audiobook_downloads += 1
+        self.active_downloads += 1
+
+    def _release_download_slot(self, media_type: str) -> None:
+        """Return a slot to the matching concurrency pool."""
+        if media_type == "ebook":
+            self.active_ebook_downloads = max(0, self.active_ebook_downloads - 1)
+        else:
+            self.active_audiobook_downloads = max(0, self.active_audiobook_downloads - 1)
+        self.active_downloads = max(0, self.active_downloads - 1)
 
     def get_task(self, task_id: str) -> DownloadTask | None:
         """

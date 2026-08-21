@@ -290,6 +290,7 @@ function displayWarnings(warnings) {
 
 // Create HTML for a warning card
 function createWarningCard(warning) {
+    const warningLabel = warning.warning === 'Invalid URL format' ? 'INVALID URL' : 'WARNING';
     return `
         <div class="card mb-3 border-warning warning-card">
             <div class="card-body">
@@ -297,7 +298,7 @@ function createWarningCard(warning) {
                     <div class="flex-grow-1">
                         <h6 class="mb-1">
                             <i class="bi bi-exclamation-triangle text-warning"></i>
-                            <span class="badge bg-warning text-dark">INVALID URL</span>
+                            <span class="badge bg-warning text-dark">${warningLabel}</span>
                         </h6>
                         <p class="mb-1 text-muted small">
                             ${escapeHtml(warning.url)}

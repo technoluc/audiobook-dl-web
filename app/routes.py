@@ -13,7 +13,7 @@ from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app.availability import check_url_availability, is_storytel_url
+from app.availability import availability_provider, check_url_availability
 from app.services import SUPPORTED_SERVICES
 from app.utils import is_valid_url
 
@@ -220,11 +220,14 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
                 continue
 
             available_formats = None
-            if is_storytel_url(url):
+            provider = availability_provider(url)
+            if provider:
                 try:
                     available_formats = await check_url_availability(url)
                 except (OSError, TimeoutError, ValueError, json.JSONDecodeError) as error:
-                    logger.warning("Could not verify Storytel availability for %s: %s", url, error)
+                    logger.warning(
+                        "Could not verify %s availability for %s: %s", provider, url, error
+                    )
 
             if available_formats is not None:
                 unavailable = [
@@ -243,7 +246,8 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
                             "url": url,
                             "warning": "Format not available",
                             "message": (
-                                f"Skipped unavailable Storytel format(s): {', '.join(unavailable)}"
+                                f"Skipped unavailable {provider.title()} format(s): "
+                                f"{', '.join(unavailable)}"
                             ),
                         }
                     )
@@ -275,16 +279,18 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
     @router.get("/api/url-availability")
     async def url_availability(url: str):
         """Resolve actual title formats for providers that expose this information."""
-        if not is_storytel_url(url):
+        provider = availability_provider(url)
+        if not provider:
             raise HTTPException(status_code=400, detail="Availability check is not supported")
         try:
             formats = await check_url_availability(url)
         except (OSError, TimeoutError, ValueError, json.JSONDecodeError) as error:
             logger.warning("Availability check failed for %s: %s", url, error)
             raise HTTPException(
-                status_code=502, detail="Could not verify availability with Storytel"
+                status_code=502,
+                detail=f"Could not verify availability with {provider.title()}",
             ) from None
-        return JSONResponse(content={**formats, "verified": True})
+        return JSONResponse(content={**formats, "verified": True, "provider": provider.title()})
 
     @router.get("/api/tasks")
     async def get_tasks():

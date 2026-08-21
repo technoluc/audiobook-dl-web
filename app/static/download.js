@@ -22,16 +22,19 @@ const STATUS_COLORS = {
 
 let updateInterval = null;
 let collapsedTasks = new Set(); // Track which tasks are collapsed
+let urlSelections = new Map();
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function () {
     // Load existing tasks
     loadTasks();
 
-    // Audiobooks and e-books deliberately use separate forms.
-    document.querySelectorAll('.download-form').forEach(form => {
-        form.addEventListener('submit', handleFormSubmit);
-    });
+    const form = document.getElementById('downloadForm');
+    const urls = document.getElementById('urls');
+    const selectionList = document.getElementById('urlSelectionList');
+    if (form) form.addEventListener('submit', handleFormSubmit);
+    if (urls) urls.addEventListener('input', renderUrlSelections);
+    if (selectionList) selectionList.addEventListener('change', rememberUrlSelection);
 
     // Setup clear completed button
     const clearBtn = document.getElementById('clearCompleted');
@@ -49,6 +52,17 @@ async function handleFormSubmit(e) {
 
     const form = e.target;
     const formData = new FormData(form);
+    const urls = getParsedUrls();
+    const selections = urls.map((url, index) => ({
+        url,
+        audiobook: document.querySelector(`[data-url-index="${index}"][data-type="audiobook"]`)?.checked === true,
+        ebook: document.querySelector(`[data-url-index="${index}"][data-type="ebook"]`)?.checked === true
+    }));
+    if (!selections.some(item => item.audiobook || item.ebook)) {
+        showNotification('Select at least one audiobook or e-book download.', 'warning');
+        return;
+    }
+    formData.set('selections', JSON.stringify(selections));
 
     try {
         const response = await fetch('/api/download', {
@@ -57,13 +71,16 @@ async function handleFormSubmit(e) {
         });
 
         if (!response.ok) {
-            throw new Error('Failed to start download');
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Failed to start download');
         }
 
         const data = await response.json();
 
         // Clear the form
         form.reset();
+        urlSelections.clear();
+        renderUrlSelections();
 
         // Show success message with warning count if applicable
         if (data.warnings && data.warnings.length > 0) {
@@ -89,6 +106,53 @@ async function handleFormSubmit(e) {
         console.error('Error starting download:', error);
         showNotification('Failed to start downloads: ' + error.message, 'danger');
     }
+}
+
+function getParsedUrls() {
+    const value = document.getElementById('urls')?.value || '';
+    return [...new Set(value.split(/\r?\n/).map(url => url.trim()).filter(Boolean))];
+}
+
+function recognisedFormats(url) {
+    let host = '';
+    try { host = new URL(url).hostname.toLowerCase(); } catch (_) { return { audiobook: false, ebook: false }; }
+    const shared = ['nextory.', 'storytel.', 'mofibo.', 'saxo.', 'ereolen.'];
+    const ebookOnly = ['royalroad.', 'fanfiction.net', 'webtoons.', 'marvel.', 'mangaplus.', 'archive.org'];
+    if (shared.some(domain => host.includes(domain))) return { audiobook: true, ebook: true };
+    if (ebookOnly.some(domain => host.includes(domain))) return { audiobook: false, ebook: true };
+    return { audiobook: true, ebook: false };
+}
+
+function rememberUrlSelection(event) {
+    const checkbox = event.target.closest('[data-url-index][data-type]');
+    if (!checkbox) return;
+    const url = getParsedUrls()[Number(checkbox.dataset.urlIndex)];
+    if (!url) return;
+    const selected = urlSelections.get(url) || recognisedFormats(url);
+    selected[checkbox.dataset.type] = checkbox.checked;
+    urlSelections.set(url, selected);
+}
+
+function renderUrlSelections() {
+    const urls = getParsedUrls();
+    const wrapper = document.getElementById('urlSelection');
+    const list = document.getElementById('urlSelectionList');
+    if (!wrapper || !list) return;
+    wrapper.classList.toggle('d-none', urls.length === 0);
+
+    urls.forEach((url, index) => {
+        if (!urlSelections.has(url)) urlSelections.set(url, recognisedFormats(url));
+    });
+
+    list.innerHTML = urls.map((url, index) => {
+        const selected = urlSelections.get(url);
+        return `<div class="list-group-item" data-selection-row="${index}">
+            <div class="text-break small mb-2"><i class="bi bi-link-45deg"></i> ${escapeHtml(url)}</div>
+            <div class="d-flex flex-wrap gap-3">
+                <div class="form-check"><input class="form-check-input" type="checkbox" data-url-index="${index}" data-type="audiobook" id="audio-${index}" ${selected.audiobook ? 'checked' : ''}><label class="form-check-label" for="audio-${index}"><i class="bi bi-headphones"></i> Download audiobook</label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" data-url-index="${index}" data-type="ebook" id="ebook-${index}" ${selected.ebook ? 'checked' : ''}><label class="form-check-label" for="ebook-${index}"><i class="bi bi-book"></i> Download e-book</label></div>
+            </div></div>`;
+    }).join('');
 }
 
 // Load all tasks from the server
@@ -502,13 +566,17 @@ function createMetadataDisplay(metadata) {
 
 // Add URL to input field with optional message
 function addUrlToInput(url, mediaType = 'audiobook', message = 'URL added to download form') {
-    const fieldId = mediaType === 'ebook' ? 'ebookUrls' : 'audiobookUrls';
-    const urlsTextarea = document.getElementById(fieldId);
+    const urlsTextarea = document.getElementById('urls');
     if (!urlsTextarea) return;
 
     // Add the URL to the textarea
     const currentValue = urlsTextarea.value.trim();
     urlsTextarea.value = currentValue ? currentValue + '\n' + url : url;
+    urlSelections.set(url, {
+        audiobook: mediaType !== 'ebook',
+        ebook: mediaType === 'ebook'
+    });
+    renderUrlSelections();
 
     // Scroll to the form
     urlsTextarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -522,12 +590,12 @@ function addUrlToInput(url, mediaType = 'audiobook', message = 'URL added to dow
 
 // Retry a failed download
 function retryTask(url, mediaType = 'audiobook') {
-    addUrlToInput(url, mediaType, 'URL added to the matching form. Start it when ready.');
+    addUrlToInput(url, mediaType, 'URL added with its previous format selected.');
 }
 
 // Copy URL to input field
 function copyUrlToInput(url, mediaType = 'audiobook') {
-    addUrlToInput(url, mediaType, 'URL added to the matching download form');
+    addUrlToInput(url, mediaType, 'URL added to the download form');
 }
 
 // Clear completed tasks

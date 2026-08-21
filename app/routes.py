@@ -2,6 +2,7 @@
 FastAPI route handlers for audiobook-dl-web
 """
 
+import json
 import logging
 import tomllib
 import uuid
@@ -163,6 +164,11 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
         output_format: str | None = Form(None),
         output_template: str | None = Form(None),
         media_type: str = Form("audiobook"),
+        selections: str | None = Form(None),
+        audiobook_output_format: str | None = Form(None),
+        audiobook_output_template: str | None = Form(None),
+        ebook_output_format: str | None = Form(None),
+        ebook_output_template: str | None = Form(None),
     ):
         """
         Start downloading audiobooks from provided URLs
@@ -174,12 +180,26 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
             output_format: Output file format (mp3, m4b, etc.)
             output_template: Output path template
         """
-        url_list = [url.strip() for url in urls.split("\n") if url.strip()]
+        url_list = list(dict.fromkeys(url.strip() for url in urls.split("\n") if url.strip()))
 
         if not url_list:
             raise HTTPException(status_code=400, detail="No URLs provided")
         if media_type not in {"audiobook", "ebook"}:
             raise HTTPException(status_code=400, detail="Invalid media type")
+
+        selected_types = {url: [media_type] for url in url_list}
+        if selections:
+            try:
+                parsed = json.loads(selections)
+                selected_types = {
+                    item["url"]: [
+                        kind for kind in ("audiobook", "ebook") if item.get(kind) is True
+                    ]
+                    for item in parsed
+                    if isinstance(item, dict) and item.get("url") in url_list
+                }
+            except (json.JSONDecodeError, TypeError):
+                raise HTTPException(status_code=400, detail="Invalid URL selections") from None
 
         logger.info(f"Adding {len(url_list)} URL(s) to download queue")
 
@@ -198,18 +218,27 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
                 logger.warning(f"Invalid URL skipped: {url}")
                 continue
 
-            task_id = str(uuid.uuid4())
-            task = await download_manager.add_download(
-                url=url,
-                task_id=task_id,
-                output_template=output_template,
-                combine=combine,
-                no_chapters=no_chapters,
-                output_format=output_format,
-                media_type=media_type,
-            )
-            tasks.append(task.to_dict())
-            logger.info(f"Task added to queue - ID: {task_id}, URL: {url}")
+            for selected_type in selected_types.get(url, []):
+                task_id = str(uuid.uuid4())
+                is_ebook = selected_type == "ebook"
+                task = await download_manager.add_download(
+                    url=url,
+                    task_id=task_id,
+                    output_template=(ebook_output_template if is_ebook else audiobook_output_template)
+                    or output_template,
+                    combine=combine if not is_ebook else False,
+                    no_chapters=no_chapters if not is_ebook else False,
+                    output_format=(ebook_output_format if is_ebook else audiobook_output_format)
+                    or output_format,
+                    media_type=selected_type,
+                )
+                tasks.append(task.to_dict())
+                logger.info(
+                    f"Task added to queue - ID: {task_id}, Type: {selected_type}, URL: {url}"
+                )
+
+        if not tasks and not warnings:
+            raise HTTPException(status_code=400, detail="Select at least one download format")
 
         return JSONResponse(content={"tasks": tasks, "warnings": warnings})
 

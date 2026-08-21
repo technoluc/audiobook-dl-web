@@ -159,15 +159,15 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
     @router.post("/api/download")
     async def start_download(
         urls: str = Form(...),
-        combine: bool = Form(False),
+        combine: bool = Form(True),
         no_chapters: bool = Form(False),
         output_format: str | None = Form(None),
         output_template: str | None = Form(None),
         media_type: str = Form("audiobook"),
         selections: str | None = Form(None),
-        audiobook_output_format: str | None = Form(None),
+        audiobook_output_format: str | None = Form("m4b"),
         audiobook_output_template: str | None = Form(None),
-        ebook_output_format: str | None = Form(None),
+        ebook_output_format: str | None = Form("epub"),
         ebook_output_template: str | None = Form(None),
     ):
         """

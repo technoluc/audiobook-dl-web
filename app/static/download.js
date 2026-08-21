@@ -23,6 +23,7 @@ const STATUS_COLORS = {
 let updateInterval = null;
 let collapsedTasks = new Set(); // Track which tasks are collapsed
 let urlSelections = new Map();
+let availabilityRequests = new Set();
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function () {
@@ -85,7 +86,7 @@ async function handleFormSubmit(e) {
         // Show success message with warning count if applicable
         if (data.warnings && data.warnings.length > 0) {
             showNotification(
-                `${data.tasks.length} download(s) started. ${data.warnings.length} invalid URL(s) skipped.`,
+                `${data.tasks.length} download(s) started. ${data.warnings.length} warning(s).`,
                 'warning'
             );
             // Display warnings in the queue
@@ -116,11 +117,48 @@ function getParsedUrls() {
 function recognisedFormats(url) {
     let host = '';
     try { host = new URL(url).hostname.toLowerCase(); } catch (_) { return { audiobook: false, ebook: false }; }
-    const shared = ['nextory.', 'storytel.', 'mofibo.', 'saxo.', 'ereolen.'];
+    const shared = ['storytel.', 'mofibo.', 'saxo.', 'ereolen.'];
     const ebookOnly = ['royalroad.', 'fanfiction.net', 'webtoons.', 'marvel.', 'mangaplus.', 'archive.org'];
     if (shared.some(domain => host.includes(domain))) return { audiobook: true, ebook: true };
     if (ebookOnly.some(domain => host.includes(domain))) return { audiobook: false, ebook: true };
     return { audiobook: true, ebook: false };
+}
+
+function isNextoryBookUrl(url) {
+    try {
+        const parsed = new URL(url);
+        return ['nextory.com', 'www.nextory.com'].includes(parsed.hostname.toLowerCase())
+            && parsed.pathname.includes('/book/');
+    } catch (_) {
+        return false;
+    }
+}
+
+async function checkUrlAvailability(url) {
+    if (availabilityRequests.has(url)) return;
+    availabilityRequests.add(url);
+    try {
+        const response = await fetch(`/api/url-availability?url=${encodeURIComponent(url)}`);
+        if (!response.ok) throw new Error('Availability check failed');
+        const formats = await response.json();
+        urlSelections.set(url, {
+            audiobook: formats.audiobook === true,
+            ebook: formats.ebook === true,
+            checking: false,
+            verified: formats.verified === true
+        });
+    } catch (error) {
+        urlSelections.set(url, {
+            audiobook: false,
+            ebook: false,
+            checking: false,
+            verified: false,
+            error: 'Could not verify formats; choose manually.'
+        });
+    } finally {
+        availabilityRequests.delete(url);
+        renderUrlSelections();
+    }
 }
 
 function rememberUrlSelection(event) {
@@ -141,18 +179,34 @@ function renderUrlSelections() {
     wrapper.classList.toggle('d-none', urls.length === 0);
 
     urls.forEach((url, index) => {
-        if (!urlSelections.has(url)) urlSelections.set(url, recognisedFormats(url));
+        if (!urlSelections.has(url)) {
+            urlSelections.set(url, isNextoryBookUrl(url)
+                ? { audiobook: false, ebook: false, checking: true, verified: false }
+                : recognisedFormats(url));
+        }
     });
 
     list.innerHTML = urls.map((url, index) => {
         const selected = urlSelections.get(url);
+        const disabled = selected.checking ? 'disabled' : '';
+        const availability = selected.checking
+            ? '<div class="form-text"><span class="spinner-border spinner-border-sm me-1"></span>Checking availability…</div>'
+            : selected.verified
+                ? '<div class="form-text text-success"><i class="bi bi-check-circle"></i> Availability verified by Nextory</div>'
+                : selected.error
+                    ? `<div class="form-text text-warning"><i class="bi bi-exclamation-triangle"></i> ${escapeHtml(selected.error)}</div>`
+                    : '';
         return `<div class="list-group-item" data-selection-row="${index}">
             <div class="text-break small mb-2"><i class="bi bi-link-45deg"></i> ${escapeHtml(url)}</div>
             <div class="d-flex flex-wrap gap-3">
-                <div class="form-check"><input class="form-check-input" type="checkbox" data-url-index="${index}" data-type="audiobook" id="audio-${index}" ${selected.audiobook ? 'checked' : ''}><label class="form-check-label" for="audio-${index}"><i class="bi bi-headphones"></i> Download audiobook</label></div>
-                <div class="form-check"><input class="form-check-input" type="checkbox" data-url-index="${index}" data-type="ebook" id="ebook-${index}" ${selected.ebook ? 'checked' : ''}><label class="form-check-label" for="ebook-${index}"><i class="bi bi-book"></i> Download e-book</label></div>
-            </div></div>`;
+                <div class="form-check"><input class="form-check-input" type="checkbox" data-url-index="${index}" data-type="audiobook" id="audio-${index}" ${selected.audiobook ? 'checked' : ''} ${disabled}><label class="form-check-label" for="audio-${index}"><i class="bi bi-headphones"></i> Download audiobook</label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" data-url-index="${index}" data-type="ebook" id="ebook-${index}" ${selected.ebook ? 'checked' : ''} ${disabled}><label class="form-check-label" for="ebook-${index}"><i class="bi bi-book"></i> Download e-book</label></div>
+            </div>${availability}</div>`;
     }).join('');
+
+    urls.forEach(url => {
+        if (urlSelections.get(url)?.checking) checkUrlAvailability(url);
+    });
 }
 
 // Load all tasks from the server
@@ -236,6 +290,7 @@ function displayWarnings(warnings) {
 
 // Create HTML for a warning card
 function createWarningCard(warning) {
+    const warningLabel = warning.warning === 'Invalid URL format' ? 'INVALID URL' : 'WARNING';
     return `
         <div class="card mb-3 border-warning warning-card">
             <div class="card-body">
@@ -243,7 +298,7 @@ function createWarningCard(warning) {
                     <div class="flex-grow-1">
                         <h6 class="mb-1">
                             <i class="bi bi-exclamation-triangle text-warning"></i>
-                            <span class="badge bg-warning text-dark">INVALID URL</span>
+                            <span class="badge bg-warning text-dark">${warningLabel}</span>
                         </h6>
                         <p class="mb-1 text-muted small">
                             ${escapeHtml(warning.url)}

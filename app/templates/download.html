@@ -1,161 +1,35 @@
 {% extends "base.html" %}
-
 {% block title %}audiobook-dl-web - Download Books{% endblock %}
-
 {% block content %}
-<div class="row">
-    <div class="col-xl-11 mx-auto">
-        <h2 class="mb-2"><i class="bi bi-download"></i> Download Books</h2>
-        <p class="text-muted mb-4">
-            Audiobooks and e-books are intentionally separate. You can paste the same URL in both fields
-            when you want both formats.
-        </p>
-
-        <div class="row g-4 mb-4">
-            <div class="col-lg-6">
-                <div class="card h-100 border-primary">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0"><i class="bi bi-headphones"></i> Audiobooks</h5>
-                    </div>
-                    <div class="card-body">
-                        <form id="audiobookForm" class="download-form">
-                            <input type="hidden" name="media_type" value="audiobook">
-                            <div class="mb-3">
-                                <label for="audiobookUrls" class="form-label">Audiobook URLs</label>
-                                <textarea class="form-control" id="audiobookUrls" name="urls" rows="7" required
-                                    placeholder="Paste audiobook URLs here (one per line)"></textarea>
-                                <div class="form-text">These URLs are handled only by audiobook-dl.</div>
-                            </div>
-
-                            <div class="accordion mb-3" id="audiobookAdvanced">
-                                <div class="accordion-item">
-                                    <h6 class="accordion-header">
-                                        <button class="accordion-button collapsed" type="button"
-                                            data-bs-toggle="collapse" data-bs-target="#audiobookOptions">
-                                            Advanced audiobook options
-                                        </button>
-                                    </h6>
-                                    <div id="audiobookOptions" class="accordion-collapse collapse"
-                                        data-bs-parent="#audiobookAdvanced">
-                                        <div class="accordion-body">
-                                            <div class="mb-3">
-                                                <label for="audiobookTemplate" class="form-label">Output template</label>
-                                                <input class="form-control" id="audiobookTemplate"
-                                                    name="output_template" placeholder="{title}">
-                                                <div class="form-text">{title}, {author}, {series}, {narrator}</div>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label for="audiobookFormat" class="form-label">Output format</label>
-                                                <select class="form-select" id="audiobookFormat" name="output_format">
-                                                    <option value="">Default</option>
-                                                    <option value="m4b">M4B</option>
-                                                    <option value="mp3">MP3</option>
-                                                    <option value="m4a">M4A</option>
-                                                </select>
-                                            </div>
-                                            <div class="form-check mb-2">
-                                                <input class="form-check-input" type="checkbox" id="combine"
-                                                    name="combine">
-                                                <label class="form-check-label" for="combine">Combine into one file</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="noChapters"
-                                                    name="no_chapters">
-                                                <label class="form-check-label" for="noChapters">Exclude chapters</label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button type="submit" class="btn btn-primary w-100">
-                                <i class="bi bi-headphones"></i> Download Audiobooks
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-6">
-                <div class="card h-100 border-success">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0"><i class="bi bi-book"></i> E-books &amp; Comics</h5>
-                    </div>
-                    <div class="card-body">
-                        <form id="ebookForm" class="download-form">
-                            <input type="hidden" name="media_type" value="ebook">
-                            <div class="mb-3">
-                                <label for="ebookUrls" class="form-label">E-book URLs</label>
-                                <textarea class="form-control" id="ebookUrls" name="urls" rows="7" required
-                                    placeholder="Paste e-book URLs here (one per line)"></textarea>
-                                <div class="form-text">These URLs are handled only by Grawlix.</div>
-                            </div>
-
-                            <div class="accordion mb-3" id="ebookAdvanced">
-                                <div class="accordion-item">
-                                    <h6 class="accordion-header">
-                                        <button class="accordion-button collapsed" type="button"
-                                            data-bs-toggle="collapse" data-bs-target="#ebookOptions">
-                                            Advanced e-book options
-                                        </button>
-                                    </h6>
-                                    <div id="ebookOptions" class="accordion-collapse collapse"
-                                        data-bs-parent="#ebookAdvanced">
-                                        <div class="accordion-body">
-                                            <div class="mb-3">
-                                                <label for="ebookTemplate" class="form-label">Output template</label>
-                                                <input class="form-control" id="ebookTemplate" name="output_template"
-                                                    placeholder="{authors}/{title}.{ext}">
-                                                <div class="form-text">
-                                                    {title}, {authors}, {series}, {index}, {publisher}, {language}, {ext}
-                                                </div>
-                                            </div>
-                                            <div class="mb-0">
-                                                <label for="ebookFormat" class="form-label">Output format</label>
-                                                <select class="form-select" id="ebookFormat" name="output_format">
-                                                    <option value="">Automatic</option>
-                                                    <option value="epub">EPUB</option>
-                                                    <option value="cbz">CBZ</option>
-                                                    <option value="acsm">ACSM</option>
-                                                </select>
-                                                <div class="form-text">
-                                                    A forced format must be compatible with the source content.
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button type="submit" class="btn btn-success w-100">
-                                <i class="bi bi-book"></i> Download E-books
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Download Queue</h5>
-                <button type="button" class="btn btn-sm btn-outline-danger" id="clearCompleted">
-                    <i class="bi bi-trash"></i> Clear Completed
-                </button>
-            </div>
-            <div class="card-body">
-                <div id="taskList">
-                    <div class="text-center text-muted py-4">
-                        <i class="bi bi-inbox display-4"></i>
-                        <p class="mt-2">No downloads in queue</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+<div class="row"><div class="col-xl-10 mx-auto">
+<h2 class="mb-4"><i class="bi bi-download"></i> Download Books</h2>
+<div class="card mb-4"><div class="card-header"><h5 class="mb-0">Add downloads</h5></div><div class="card-body">
+<form id="downloadForm">
+<div class="mb-3"><label for="urls" class="form-label">Book URLs</label>
+<textarea class="form-control" id="urls" name="urls" rows="5" required placeholder="Paste book URLs here (one per line)"></textarea>
+<div class="form-text">Each unique URL is added to the list below.</div></div>
+<div id="urlSelection" class="mb-3 d-none">
+<div class="d-flex justify-content-between align-items-center mb-2"><label class="form-label mb-0">Downloads per URL</label><small class="text-muted">Change selections per book</small></div>
+<div class="list-group" id="urlSelectionList"></div>
+<div class="form-text mt-2">Selections are suggested from the source URL. Exact title availability is confirmed by the provider when the task starts.</div>
 </div>
+<div class="accordion mb-3" id="advancedOptions">
+<div class="accordion-item"><h6 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#ebookOptions">Advanced e-book options</button></h6>
+<div id="ebookOptions" class="accordion-collapse collapse" data-bs-parent="#advancedOptions"><div class="accordion-body"><div class="row">
+<div class="col-md-8 mb-3 mb-md-0"><label for="ebookTemplate" class="form-label">Output template</label><input class="form-control" id="ebookTemplate" name="ebook_output_template" placeholder="{authors}/{title}.{ext}"><div class="form-text">{title}, {authors}, {series}, {index}, {publisher}, {language}, {ext}</div></div>
+<div class="col-md-4"><label for="ebookFormat" class="form-label">Output format</label><select class="form-select" id="ebookFormat" name="ebook_output_format"><option value="">Automatic</option><option value="epub">EPUB</option><option value="cbz">CBZ</option><option value="acsm">ACSM</option></select></div>
+</div></div></div></div>
+<div class="accordion-item"><h6 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#audiobookOptions">Advanced audiobook options</button></h6>
+<div id="audiobookOptions" class="accordion-collapse collapse" data-bs-parent="#advancedOptions"><div class="accordion-body"><div class="row">
+<div class="col-md-8 mb-3"><label for="audiobookTemplate" class="form-label">Output template</label><input class="form-control" id="audiobookTemplate" name="audiobook_output_template" placeholder="{title}"><div class="form-text">{title}, {author}, {series}, {narrator}</div></div>
+<div class="col-md-4 mb-3"><label for="audiobookFormat" class="form-label">Output format</label><select class="form-select" id="audiobookFormat" name="audiobook_output_format"><option value="">Default</option><option value="m4b">M4B</option><option value="mp3">MP3</option><option value="m4a">M4A</option></select></div>
+</div><div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="combine" name="combine"><label class="form-check-label" for="combine">Combine into one file</label></div>
+<div class="form-check"><input class="form-check-input" type="checkbox" id="noChapters" name="no_chapters"><label class="form-check-label" for="noChapters">Exclude chapters</label></div>
+</div></div></div></div>
+<button type="submit" class="btn btn-primary btn-lg" id="startDownloads"><i class="bi bi-download"></i> Start selected downloads</button>
+</form></div></div>
+<div class="card"><div class="card-header d-flex justify-content-between align-items-center"><h5 class="mb-0">Download Queue</h5><button type="button" class="btn btn-sm btn-outline-danger" id="clearCompleted"><i class="bi bi-trash"></i> Clear Completed</button></div>
+<div class="card-body"><div id="taskList"><div class="text-center text-muted py-4"><i class="bi bi-inbox display-4"></i><p class="mt-2">No downloads in queue</p></div></div></div></div>
+</div></div>
 {% endblock %}
-
-{% block extra_scripts %}
-<script src="/static/download.js?v={{ cache_bust }}"></script>
-{% endblock %}
+{% block extra_scripts %}<script src="/static/download.js?v={{ cache_bust }}"></script>{% endblock %}

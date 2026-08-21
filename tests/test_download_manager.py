@@ -1,3 +1,4 @@
+import asyncio
 import shutil
 from pathlib import Path
 
@@ -115,6 +116,23 @@ def test_download_task_serializes_media_type_and_multiple_outputs():
 
     assert serialized["media_type"] == "ebook"
     assert serialized["output_files"] == task.output_files
+
+
+def test_ebook_slot_does_not_wait_for_full_audiobook_pool(tmp_path: Path):
+    config_dir = tmp_path / "config"
+    downloads_dir = tmp_path / "downloads"
+    _write_config(config_dir, "max_concurrent_downloads = 1\n")
+    dm = DownloadManager(str(config_dir), str(downloads_dir))
+    dm.active_downloads = 1
+    dm.active_audiobook_downloads = 1
+
+    asyncio.run(asyncio.wait_for(dm._acquire_download_slot("ebook"), timeout=0.05))
+
+    assert dm.active_audiobook_downloads == 1
+    assert dm.active_ebook_downloads == 1
+    assert dm.active_downloads == 2
+    dm._release_download_slot("ebook")
+    assert dm.active_downloads == 1
 
 
 def test_unwrap_staging_dir_moves_single_dir_and_updates_output_file(tmp_path: Path):

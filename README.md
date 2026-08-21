@@ -12,6 +12,7 @@ A modern, responsive web interface for [audiobook-dl](https://github.com/jo1gi/a
 ```bash
 git clone https://github.com/yourusername/audiobook-dl-web.git
 cd audiobook-dl-web
+docker build --no-cache
 docker-compose up -d
 ```
 Open `http://localhost:8000` → Configure Services → Enter credentials → Download → Paste URLs → Start Download

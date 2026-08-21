@@ -117,20 +117,22 @@ function getParsedUrls() {
 function recognisedFormats(url) {
     let host = '';
     try { host = new URL(url).hostname.toLowerCase(); } catch (_) { return { audiobook: false, ebook: false }; }
-    const shared = ['storytel.', 'mofibo.', 'saxo.', 'ereolen.'];
+    const shared = ['mofibo.', 'saxo.', 'ereolen.'];
     const ebookOnly = ['royalroad.', 'fanfiction.net', 'webtoons.', 'marvel.', 'mangaplus.', 'archive.org'];
     if (shared.some(domain => host.includes(domain))) return { audiobook: true, ebook: true };
     if (ebookOnly.some(domain => host.includes(domain))) return { audiobook: false, ebook: true };
     return { audiobook: true, ebook: false };
 }
 
-function isNextoryBookUrl(url) {
+function availabilityProvider(url) {
     try {
         const parsed = new URL(url);
-        return ['nextory.com', 'www.nextory.com'].includes(parsed.hostname.toLowerCase())
-            && parsed.pathname.includes('/book/');
+        const host = parsed.hostname.toLowerCase();
+        if (['storytel.com', 'www.storytel.com'].includes(host) && parsed.pathname.includes('/books/')) return 'Storytel';
+        if (['nextory.com', 'www.nextory.com'].includes(host) && parsed.pathname.includes('/book/')) return 'Nextory';
+        return null;
     } catch (_) {
-        return false;
+        return null;
     }
 }
 
@@ -145,7 +147,8 @@ async function checkUrlAvailability(url) {
             audiobook: formats.audiobook === true,
             ebook: formats.ebook === true,
             checking: false,
-            verified: formats.verified === true
+            verified: formats.verified === true,
+            provider: formats.provider || availabilityProvider(url)
         });
     } catch (error) {
         urlSelections.set(url, {
@@ -180,8 +183,9 @@ function renderUrlSelections() {
 
     urls.forEach((url, index) => {
         if (!urlSelections.has(url)) {
-            urlSelections.set(url, isNextoryBookUrl(url)
-                ? { audiobook: false, ebook: false, checking: true, verified: false }
+            const provider = availabilityProvider(url);
+            urlSelections.set(url, provider
+                ? { audiobook: false, ebook: false, checking: true, verified: false, provider }
                 : recognisedFormats(url));
         }
     });
@@ -192,7 +196,7 @@ function renderUrlSelections() {
         const availability = selected.checking
             ? '<div class="form-text"><span class="spinner-border spinner-border-sm me-1"></span>Checking availability…</div>'
             : selected.verified
-                ? '<div class="form-text text-success"><i class="bi bi-check-circle"></i> Availability verified by Nextory</div>'
+                ? `<div class="form-text text-success"><i class="bi bi-check-circle"></i> Availability verified by ${escapeHtml(selected.provider)}</div>`
                 : selected.error
                     ? `<div class="form-text text-warning"><i class="bi bi-exclamation-triangle"></i> ${escapeHtml(selected.error)}</div>`
                     : '';

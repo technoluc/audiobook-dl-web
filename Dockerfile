@@ -17,15 +17,15 @@ WORKDIR /app
 # Copy project files and application code
 COPY pyproject.toml ./
 COPY app/ ./app/
-COPY patch_nextory.py ./
 
 # Install application dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir .
 
-# Install latest audiobook-dl from GitHub master
+# Install latest audiobook-dl from the technoluc fork (GitHub generates this
+# tarball from the master branch; no release archive is required).
 RUN curl -L \
-        https://github.com/jo1gi/audiobook-dl/archive/refs/heads/master.tar.gz \
+        https://github.com/technoluc/audiobook-dl/archive/refs/heads/master.tar.gz \
         -o /tmp/audiobook-dl.tar.gz && \
     mkdir -p /tmp/audiobook-dl-src && \
     tar -xzf /tmp/audiobook-dl.tar.gz \
@@ -40,7 +40,7 @@ RUN curl -L \
         /usr/local/lib/python3.14/site-packages/audiobookdl/ && \
     rm -rf /tmp/audiobook-dl.tar.gz /tmp/audiobook-dl-src
 
-# Required by the Nextory cover patch
+# audiobook-dl is installed with --no-deps; Nextory still needs dateutil.
 RUN pip install --no-cache-dir python-dateutil
 
 # Install the patched Grawlix fork for e-book downloads. The released PyPI
@@ -60,9 +60,6 @@ RUN curl -L \
         /tmp/grawlix-src/grawlix/assets \
         /usr/local/lib/python3.14/site-packages/grawlix/ && \
     rm -rf /tmp/grawlix.tar.gz /tmp/grawlix-src
-
-# Apply Nextory WebP -> JPEG cover patch
-RUN python3 /app/patch_nextory.py
 
 # Create directories for volumes
 RUN mkdir -p /app/config /app/downloads /app/logs

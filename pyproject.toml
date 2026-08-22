@@ -12,7 +12,6 @@ dependencies = [
     "aiofiles>=24.1.0",
     "audiobook-dl>=0.5.0",
     "grawlix>=0.2.1",
-    "mutagen>=1.47.0",
     "tomli-w>=1.1.0",
     "python-dotenv>=1.0.1",
 ]

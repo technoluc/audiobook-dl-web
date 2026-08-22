@@ -22,9 +22,10 @@ COPY app/ ./app/
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir .
 
-# Install latest audiobook-dl from GitHub master
+# Install latest audiobook-dl from the technoluc fork (GitHub generates this
+# tarball from the master branch; no release archive is required).
 RUN curl -L \
-        https://github.com/jo1gi/audiobook-dl/archive/refs/heads/master.tar.gz \
+        https://github.com/technoluc/audiobook-dl/archive/refs/heads/master.tar.gz \
         -o /tmp/audiobook-dl.tar.gz && \
     mkdir -p /tmp/audiobook-dl-src && \
     tar -xzf /tmp/audiobook-dl.tar.gz \

@@ -253,6 +253,7 @@ Navigate to **Settings** to configure:
 - **Default output template** - Customize where files are saved
 - **Skip already downloaded books** - Avoid re-downloading
 - **Create folder for downloaded books** - When enabled, each audiobook will be downloaded to a dedicated folder named using the output template (default: disabled)
+- **Combine into one file** - Enabled by default on the download form so multi-part audiobooks are delivered as one chaptered file; it can still be unchecked per download
 - **Group by author** - When enabled, downloads are placed under an author directory in the downloads folder
 - **Maximum concurrent downloads** - Control how many audiobooks download simultaneously (1-10, default: 2)
 - **Move completed audiobooks** - Optionally transfer completed audio files to a mounted NAS or other final destination

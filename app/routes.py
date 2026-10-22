@@ -193,13 +193,11 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
             try:
                 parsed = json.loads(selections)
                 selected_types = {
-                    item["url"]: [
-                        kind for kind in ("audiobook", "ebook") if item.get(kind) is True
-                    ]
+                    item["url"]: [kind for kind in ("audiobook", "ebook") if item.get(kind) is True]
                     for item in parsed
                     if isinstance(item, dict) and item.get("url") in url_list
                 }
-            except (json.JSONDecodeError, TypeError):
+            except json.JSONDecodeError, TypeError:
                 raise HTTPException(status_code=400, detail="Invalid URL selections") from None
 
         logger.info(f"Adding {len(url_list)} URL(s) to download queue")
@@ -258,7 +256,9 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
                 task = await download_manager.add_download(
                     url=url,
                     task_id=task_id,
-                    output_template=(ebook_output_template if is_ebook else audiobook_output_template)
+                    output_template=(
+                        ebook_output_template if is_ebook else audiobook_output_template
+                    )
                     or output_template,
                     combine=combine if not is_ebook else False,
                     no_chapters=no_chapters if not is_ebook else False,
@@ -374,9 +374,7 @@ def init_routes(config_manager, download_manager, config_dir: str, downloads_dir
                 detail="The destination path must be absolute",
             )
 
-        ebook_destination_path = (
-            ebook_destination_path.strip() if ebook_destination_path else ""
-        )
+        ebook_destination_path = ebook_destination_path.strip() if ebook_destination_path else ""
         if move_ebooks_after_completion and not ebook_destination_path:
             raise HTTPException(
                 status_code=400,

@@ -157,19 +157,13 @@ class DownloadManager:
         self.default_output_template = config.get("output_template", "{title}")
         self.move_after_completion = config.get("move_after_completion", False)
         self.destination_path = config.get("destination_path", "")
-        self.ebook_output_template = config.get(
-            "ebook_output_template", "{authors}/{title}.{ext}"
-        )
-        self.move_ebooks_after_completion = config.get(
-            "move_ebooks_after_completion", False
-        )
+        self.ebook_output_template = config.get("ebook_output_template", "{authors}/{title}.{ext}")
+        self.move_ebooks_after_completion = config.get("move_ebooks_after_completion", False)
         self.ebook_destination_path = config.get("ebook_destination_path", "")
 
         # Ensure valid range (1-10)
         self.max_concurrent_downloads = max(1, min(10, self.max_concurrent_downloads))
-        self.max_concurrent_ebook_downloads = max(
-            1, min(10, self.max_concurrent_ebook_downloads)
-        )
+        self.max_concurrent_ebook_downloads = max(1, min(10, self.max_concurrent_ebook_downloads))
 
     def reload_config(self):
         """Reload configuration settings from config file"""
@@ -572,14 +566,10 @@ class DownloadManager:
 
     async def _transfer_completed_output(self, task: DownloadTask) -> None:
         """Copy completed outputs with rsync and remove sources after verification."""
-        configured_outputs = (
-            task.output_files if task.media_type == "ebook" else [task.output_file]
-        )
+        configured_outputs = task.output_files if task.media_type == "ebook" else [task.output_file]
         sources = [self._resolve_local_output(output) for output in configured_outputs]
         destination_path = (
-            self.ebook_destination_path
-            if task.media_type == "ebook"
-            else self.destination_path
+            self.ebook_destination_path if task.media_type == "ebook" else self.destination_path
         )
         if not destination_path:
             raise RuntimeError("No final destination path is configured")
